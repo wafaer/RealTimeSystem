@@ -7,6 +7,7 @@
 
 #include <rtapi/rtapi_mutex.h>
 #include <hal/hal.h>
+#include <unistd.h>
 
 #define HAL_NAME_LEN     47
 #define HAL_STACKSIZE 16384
@@ -43,7 +44,6 @@ public:
     T *operator *() { return get(); }
     const T *operator *() const { return get(); }
     T *operator ->() { return get(); }
-    const T *operator ->() const { return get(); }
     operator bool() const { return off; }
 private:
     rtapi_intptr_t off;
@@ -87,7 +87,6 @@ typedef struct hal_thread_t hal_thread_t;
 typedef struct hal_param_t hal_param_t;
 typedef struct hal_funct_t hal_funct_t;
 typedef struct hal_funct_entry_t hal_funct_entry_t;
-typedef struct hal_pin_t hal_pin_t;
 
 typedef enum
 {
@@ -97,6 +96,33 @@ typedef enum
     COMPONENT_TYPE_OTHER
 } component_type_t;
 
+// ---------------------------------------------------------------------------
+// HAL global lifecycle state machine.
+//
+// The HAL subsystem transitions through:
+//
+//   UNINIT -> INITIALIZING -> ACTIVE <-> RUNNING
+//                |               |           |
+//                v               v           v
+//              ERROR      SHUTTING_DOWN -> DESTROYED
+//
+// - UNINIT:        hal_data == NULL; no shared memory allocated.
+// - INITIALIZING:  shmget() succeeded, init_hal_data() in progress.
+// - ACTIVE:        Fully initialised; threads may be created/deleted.
+// - RUNNING:       threads_running == 1; real-time threads are executing.
+// - SHUTTING_DOWN: hal_app_exit() in progress; threads being torn down.
+// - DESTROYED:     Shared memory released; hal_data invalid.
+// - ERROR:         Non-recoverable error during initialisation.
+// ---------------------------------------------------------------------------
+typedef enum {
+    HAL_S_UNINIT        = 0,  // No shared memory allocated.
+    HAL_S_INITIALIZING  = 1,  // shmget succeeded, init_hal_data in progress.
+    HAL_S_ACTIVE        = 2,  // Fully initialised, ready for thread creation.
+    HAL_S_RUNNING       = 3,  // Real-time threads are executing.
+    HAL_S_SHUTTING_DOWN = 4,  // hal_app_exit() tearing down resources.
+    HAL_S_DESTROYED     = 5,  // Shared memory released; no further use.
+    HAL_S_ERROR         = -1  // Non-recoverable initialisation failure.
+} hal_state_t;
 
 typedef struct hal_data_t {
     rtapi_mutex_t mutex;	/* protection for linked lists, etc. */
@@ -126,7 +152,36 @@ typedef struct hal_data_t {
     int exact_base_period;      /* if set, pretend that rtapi satisfied our
                    period request exactly */
     unsigned char lock;         /* hal locking, can be one of the HAL_LOCK_* types */
+
+    // --- Fields added for lifecycle management (Google-style) ---
+    int state;             // Current HAL lifecycle state; one of HAL_S_*.
+                          // Set by init_hal_data() and updated by
+                          // hal_start_threads/hal_stop_threads/hal_app_exit.
+    pid_t init_pid;        // PID of the process that performed hal_init()
+                          // that created the shared memory.  0 until the
+                          // first hal_init() call completes.
+    int error_code;        // Last errno value from a failed OS operation
+                          // within the HAL layer; 0 if no error.
 } hal_data_t;
+
+// ---------------------------------------------------------------------------
+// hal_stats_t — statistics snapshot returned by hal_get_stats().
+// Caller allocates; hal_get_stats() fills it under hal_data->mutex.
+// ---------------------------------------------------------------------------
+typedef struct {
+    hal_state_t state;         // Current HAL lifecycle state.
+    int comp_count;            // Number of registered components.
+    int pin_count;             // Number of HAL pins.
+    int param_count;           // Number of HAL parameters.
+    int funct_count;           // Number of exported functions.
+    int thread_count;          // Number of created threads.
+    int threads_running;       // 1 if threads are started, 0 otherwise.
+    long shmem_avail;          // Free bytes remaining in HAL shared memory.
+    long shmem_total;          // Total HAL shared memory size (HAL_SIZE).
+    pid_t init_pid;            // PID that initialised the HAL layer.
+    int error_code;            // Last error captured by the HAL layer.
+} hal_stats_t;
+
 
 struct hal_comp_t {
     SHMFIELD(hal_comp_t) next_ptr;		/* next component in the list */
@@ -198,17 +253,28 @@ struct hal_funct_entry_t {
 };
 
 void list_init_entry(hal_list_t * entry);
-hal_list_t *list_prev(hal_list_t * entry);
-hal_list_t *list_next(hal_list_t * entry);
-void list_add_after(hal_list_t * entry, hal_list_t * prev);
-void list_add_before(hal_list_t * entry, hal_list_t * next);
-hal_list_t *list_remove_entry(hal_list_t * entry);
 
-extern hal_comp_t *halpr_find_comp_by_name(const char *name);
-extern hal_thread_t *halpr_find_thread_by_name(const char *name);
-extern hal_funct_t *halpr_find_funct_by_name(const char *name);
-extern hal_comp_t *halpr_find_comp_by_id(int id);
-
-
+static __inline__ hal_list_t *list_next(hal_list_t * entry) {
+    if (entry == (hal_list_t*)(-1))
+	return 0;
+    return SHMPTR(entry->next);
+}
+static __inline__ hal_list_t *list_prev(hal_list_t * entry) {
+    if (entry == (hal_list_t*)(-1))
+	return 0;
+    return SHMPTR(entry->prev);
+}
+static __inline__ void list_add_after(hal_list_t * new_entry,
+    hal_list_t * list_entry) {
+    new_entry->next = list_entry->next;
+    new_entry->prev = SHMOFF(list_entry);
+    list_entry->next = SHMOFF(new_entry);
+    SHMPTR(new_entry->next)->prev = SHMOFF(new_entry);
+}
+static __inline__ hal_list_t *list_remove_entry(hal_list_t * entry) {
+    SHMPTR(entry->next)->prev = entry->prev;
+    SHMPTR(entry->prev)->next = entry->next;
+    return SHMPTR(entry->next);
+}
 
 #endif //HAL_PRIV_H

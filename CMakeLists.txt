@@ -1,90 +1,99 @@
 cmake_minimum_required(VERSION 3.16)
-project(RealTimeSystem)
+project(RealTimeSystem LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_C_STANDARD 99)
+# ---------------------------------------------------------------------------
+# Compiler selection — pass CMAKE_C_COMPILER / CMAKE_CXX_COMPILER on the
+# command line or let CMake auto-detect from PATH.
+#
+#   cmake -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ ...
+#
+# ---------------------------------------------------------------------------
+
+# Language standards.
+set(CMAKE_C_STANDARD           99)
+set(CMAKE_CXX_STANDARD         17)
+set(CMAKE_C_STANDARD_REQUIRED  ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_BUILD_TYPE Debug)
+# Build type default.
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug)
+endif()
 
-set(CMAKE_C_FLAGS_DEBUG "-g -O0 -fno-omit-frame-pointer -fsanitize=address")
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -fno-omit-frame-pointer -fsanitize=address")
+# Debug flags — AddressSanitizer is enabled only on Linux where it is
+# well-supported.  On MinGW/Windows the flags are reduced to basic
+# debug symbols.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(CMAKE_C_FLAGS_DEBUG        "-g -O0 -fno-omit-frame-pointer -fsanitize=address")
+    set(CMAKE_CXX_FLAGS_DEBUG      "-g -O0 -fno-omit-frame-pointer -fsanitize=address")
+    set(CMAKE_EXE_LINKER_FLAGS_DEBUG "-fsanitize=address")
+else()
+    set(CMAKE_C_FLAGS_DEBUG        "-g -O0")
+    set(CMAKE_CXX_FLAGS_DEBUG      "-g -O0")
+endif()
 
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
+# Boost.Lockfree (used by uspace_rtapi_app.cpp) is header-only, so we only
+# need the include path.  find_package(Boost) still ensures Boost is
+# installed on the system.
 find_package(Boost REQUIRED)
 
-set(SOEM140_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/soem140/include)
-set(SOEM140_LIB_DIR     ${PROJECT_SOURCE_DIR}/soem140/lib)
-set(SOEM140_LIB         ${SOEM140_LIB_DIR}/libsoem.a)
-set(SOCKET_LIB_DIR      ${PROJECT_SOURCE_DIR}/hpsocket/lib)
-set(HPSOCKET_LIB        ${SOCKET_LIB_DIR}/libhpsocket4c.a)
-
-
+# ---------------------------------------------------------------------------
+# Include paths — all source directories are relative to PROJECT_SOURCE_DIR.
+# ---------------------------------------------------------------------------
 include_directories(
-        ${PROJECT_SOURCE_DIR}
-        ${SOEM140_INCLUDE_DIR}
-        ${Boost_INCLUDE_DIRS}
+    ${PROJECT_SOURCE_DIR}
+    ${Boost_INCLUDE_DIRS}
 )
 
-# MotroControl
+# ---------------------------------------------------------------------------
+# Source files for the SoemMotroControl executable.
+# ---------------------------------------------------------------------------
 set(MOTRO_CONTROL_SOURCES
-        ExampleTask/task.c
-        tp/tp.c
-        tp/tc.c
-        tp/tcq.c
-        ExampleTask/funct_command.c
-        kinematics/cubic.cpp
-        ExampleTask/funct_control.c
-        main/taskmain.cpp
-        libnml/_timer.c
-        hal/hal_lib.c
-        libnml/timer.cpp
-        hal/ServoEnable.c
-        libnml/emcpos.c
-        tp/blendmath.c
-        rtapi/uspace_rtapi_app.cpp
-        libnml/_posemath.c
-        main/watchdog.c
-        tp/spherical_arc.c
-        rtapi/uspace_common.c
-        libnml/posemath.cpp
-        main/cleanup.cpp
+    # ExampleTask — real-time task (C)
+    ExampleTask/task.c
+    ExampleTask/funct_command.c
+    ExampleTask/funct_control.c
+
+    # ExampleTask — C++ RAII lifecycle wrapper
+    ExampleTask/operate.cpp
+
+    # Main entry point — process lifecycle manager
+    main/taskmain.cpp
+
+    # Stubs for external symbols from the full LinuxCNC codebase
+    main/stubs.cpp
+
+    # HAL — Hardware Abstraction Layer (C)
+    hal/hal_lib.c
+
+    # RTAPI — Real-Time API userspace layer
+    rtapi/uspace_rtapi_app.cpp
+    rtapi/uspace_common.c
 )
 
 set(MOTRO_CONTROL_HEADERS
-        ExampleTask/task.h
-        rtapi/rtapi_common.h
-        rtapi/rtapi_mutex.h
-        rtapi/rtapi_bitops.h
-        tp/tp.h
-        tp/tp_types.h
-        tp/tc.h
-        tp/tc_types.h
-        ExampleTask/emcmotcfg.h
-        tp/tcq.h
-        hal/hal.h
-        libnml/emcpos.h
-        rtapi/rtapi_stdint.h
-        kinematics/cubic.h
-        hal/hal_priv.h
-        libnml/emcglb.h
-        libnml/emccfg.h
-        ExampleTask/usrmotintf.h
-        libnml/emc.h
-        libnml/_timer.h
-        main/task.h
-        libnml/timer.h
-        hal/ServoEnable.h
-        tp/blendmath.h
-        tp/spherical_arc.h
-        rtapi/rtapi_uspace.h
-        rtapi/uspace_common.h
-        rtapi/rtapi.h
-        libnml/posemath.h
-        hpsocket/include/GlobalDef.h
-        hpsocket/include/HPSocket4C.h
-        hpsocket/include/HPTypeDef.h
-        hal/servo_priv.h
+    ExampleTask/task.h
+    rtapi/rtapi_common.h
+    rtapi/rtapi_mutex.h
+    rtapi/rtapi_bitops.h
+    rtapi/rtapi_stdint.h
+    hal/hal.h
+    hal/hal_priv.h
+    rtapi/rtapi_uspace.h
+    rtapi/uspace_common.h
+    rtapi/rtapi.h
 )
 
 add_executable(SoemMotroControl ${MOTRO_CONTROL_SOURCES} ${MOTRO_CONTROL_HEADERS})
-target_link_libraries(SoemMotroControl PRIVATE ${SOEM140_LIB} ${HPSOCKET_LIB} ${Boost_LIBRARIES} pthread rt)
+
+# ---------------------------------------------------------------------------
+# Link libraries
+# ---------------------------------------------------------------------------
+target_link_libraries(SoemMotroControl PRIVATE
+    ${Boost_LIBRARIES}   # Boost libraries (usually empty for header-only usage).
+    pthread               # POSIX threads.
+    rt                    # POSIX real-time extensions (clock_gettime, etc.).
+)

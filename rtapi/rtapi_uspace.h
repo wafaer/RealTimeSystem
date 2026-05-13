@@ -31,6 +31,34 @@ inline bool rtapi_timespec_less(const struct timespec &ta, const struct timespec
 
 void rtapi_timespec_advance(struct timespec &result, const struct timespec &src, unsigned long nsec);
 
+// ---------------------------------------------------------------------------
+// Real-time task lifecycle state machine.
+//
+// Every rtapi_task transitions through one of:
+//
+//   EMPTY -> INIT (CAS) -> ALLOCATED -> RUNNING <-> PAUSED
+//                            |            |            |
+//                            v            v            v
+//                         DELETED      DELETED      DELETED
+//
+// - EMPTY:     Slot is free; task_array[n] == NULL.
+// - INIT:      CAS placeholder (TASK_MAGIC_INIT) set by allocate_task_id().
+// - ALLOCATED: Object constructed, magic written, ready to start.
+// - RUNNING:   pthread created and executing taskcode/rtapi_wait loop.
+// - PAUSED:    Task blocked on pause semaphore, awaiting resume.
+// - DELETED:   Thread cancelled and joined, object freed, slot released.
+// - ERROR:     Non-recoverable failure.
+// ---------------------------------------------------------------------------
+enum {
+  TASK_S_EMPTY     = 0,   // Slot free, no task allocated.
+  TASK_S_INIT      = 1,   // CAS placeholder (TASK_MAGIC_INIT).
+  TASK_S_ALLOCATED = 2,   // Object constructed, magic written.
+  TASK_S_RUNNING   = 3,   // pthread active and executing.
+  TASK_S_PAUSED    = 4,   // Task blocked on pause semaphore.
+  TASK_S_DELETED   = 5,   // Task cancelled, object freed, slot released.
+  TASK_S_ERROR     = -1   // Non-recoverable error.
+};
+
 struct WithRoot
 {
     WithRoot();
@@ -55,6 +83,15 @@ struct rtapi_task
   long pll_correction_limit;
   void *arg;
   void (*taskcode) (void*);	/* pointer to main function */
+
+  // --- Fields added for lifecycle management (Google-style) ---
+  int state;             // Current lifecycle state; one of the TASK_S_*
+                         // enum values.  Initialised to TASK_S_EMPTY by
+                         // rtapi_task constructor.
+  pid_t owner_pid;       // PID of the process that created this task.
+                         // Set in task_new().
+  int error_code;        // Last errno value captured on a failed OS
+                         // operation; 0 if no error has occurred.
 };
 
 struct RtapiApp
@@ -81,6 +118,7 @@ struct RtapiApp
     virtual int task_self() = 0;
     virtual long long task_pll_get_reference(void) = 0;
     virtual int task_pll_set_correction(long value) = 0;
+    virtual int task_pll_get_correction(long *value) = 0;
     virtual void wait() = 0;
     virtual int run_threads(int fd, int (*callback)(int fd)) = 0;
     virtual long long do_get_time(void) = 0;

@@ -5,7 +5,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
-#include <asm-generic/errno-base.h>
+#include <errno.h>
 
 #include "hal.h"
 #include "hal_priv.h"
@@ -59,6 +59,12 @@ int hal_init(const char *name)
 
 	if(!lib_mem_id)
 	{
+		// Guard: refuse to re-initialise after the HAL has been torn down.
+		if (hal_data && hal_data->state == HAL_S_DESTROYED) {
+			rtapi_print_msg(RTAPI_MSG_ERR,
+				"HAL: ERROR: hal_init called after destruction\n");
+			return -EINVAL;
+		}
 		rt_snprintf(rtapi_name, RTAPI_NAME_LEN, "HAL_LIB_%d", (int)getpid());
 		lib_module_id = rtapi_init(rtapi_name);
 		if (lib_module_id < 0)
@@ -142,6 +148,13 @@ int hal_exit(int comp_id)
     if (hal_data == 0) {
 
 	return -EINVAL;
+    }
+
+    // Guard: refuse to operate on a destroyed HAL.
+    if (hal_data->state == HAL_S_DESTROYED) {
+	rtapi_print_msg(RTAPI_MSG_ERR,
+	    "HAL: ERROR: hal_exit called after destruction\n");
+	return -EALREADY;
     }
 
     /* grab mutex before manipulating list */
@@ -607,12 +620,16 @@ int hal_create_thread(const char *name, unsigned long period_nsec, int uses_fp, 
     	{
     		curr_period = rtapi_clock_set_period(period_nsec);
     		if (curr_period < 0) {
+    			// Rollback: free the newly allocated thread struct.
+    			free_thread_struct(new_hal_thread_t);
     			rtapi_mutex_give(&(hal_data->mutex));
     			return -EINVAL;
     		}
     	}
     	/* make sure period <= desired period (allow 1% roundoff error) */
     	if (curr_period > (long)(period_nsec + (period_nsec / 100))) {
+    		// Rollback: free the newly allocated thread struct.
+    		free_thread_struct(new_hal_thread_t);
     		rtapi_mutex_give(&(hal_data->mutex));
     		return -EINVAL;
     	}
@@ -639,6 +656,8 @@ int hal_create_thread(const char *name, unsigned long period_nsec, int uses_fp, 
 	lib_module_id, HAL_STACKSIZE, uses_fp);
     if (retval < 0)
     {
+		// Rollback: free the thread struct on task creation failure.
+		free_thread_struct(new_hal_thread_t);
 		rtapi_mutex_give(&(hal_data->mutex));
 		return -EINVAL;
     }
@@ -648,6 +667,9 @@ int hal_create_thread(const char *name, unsigned long period_nsec, int uses_fp, 
     retval = rtapi_task_start(new_hal_thread_t->task_id, new_hal_thread_t->period);
     if (retval < 0)
     {
+		// Rollback: delete the task and free the thread struct.
+		rtapi_task_delete(new_hal_thread_t->task_id);
+		free_thread_struct(new_hal_thread_t);
 		rtapi_mutex_give(&(hal_data->mutex));
 		return -EINVAL;
     }
@@ -701,6 +723,13 @@ int hal_thread_delete(const char *name)
 	rtapi_print_msg(RTAPI_MSG_ERR,
 	    "HAL: ERROR: thread_delete called while HAL is locked\n");
 	return -EPERM;
+    }
+
+    // Guard: state must be ACTIVE or RUNNING to modify threads.
+    if (hal_data->state != HAL_S_ACTIVE && hal_data->state != HAL_S_RUNNING) {
+	rtapi_print_msg(RTAPI_MSG_ERR,
+	    "HAL: ERROR: thread_delete in invalid state %d\n", hal_data->state);
+	return -EINVAL;
     }
 
     // rtapi_print_msg(RTAPI_MSG_DBG, "HAL: deleting thread '%s'\n", name);
@@ -968,6 +997,12 @@ int hal_del_funct_from_thread(const char *funct_name, const char *thread_name)
     }
 }
 
+// ============================================================================
+// hal_start_threads — transitions the HAL into RUNNING state.
+//
+// Idempotent: if already RUNNING, returns -EALREADY.
+// Only callable from ACTIVE state.
+// ============================================================================
 int hal_start_threads(void)
 {
     /* a trivial function for a change! */
@@ -983,11 +1018,28 @@ int hal_start_threads(void)
 	return -EPERM;
     }
 
+    // State gate: only transition from ACTIVE -> RUNNING.
+    if (hal_data->state == HAL_S_RUNNING) {
+	return -EALREADY;
+    }
+    if (hal_data->state != HAL_S_ACTIVE) {
+	rtapi_print_msg(RTAPI_MSG_ERR,
+	    "HAL: ERROR: start_threads in invalid state %d\n", hal_data->state);
+	return -EINVAL;
+    }
+
     // rtapi_print_msg(RTAPI_MSG_DBG, "HAL: starting threads\n");
     hal_data->threads_running = 1;
+    hal_data->state = HAL_S_RUNNING;
     return 0;
 }
 
+// ============================================================================
+// hal_stop_threads — transitions the HAL back to ACTIVE state.
+//
+// Idempotent: if already ACTIVE, returns -EALREADY.
+// Only callable from RUNNING state.
+// ============================================================================
 int hal_stop_threads(void)
 {
     /* wow, two in a row! */
@@ -1003,12 +1055,29 @@ int hal_stop_threads(void)
 	return -EPERM;
     }
 
+    // State gate: only transition from RUNNING -> ACTIVE.
+    if (hal_data->state == HAL_S_ACTIVE) {
+	return -EALREADY;
+    }
+    if (hal_data->state != HAL_S_RUNNING) {
+	rtapi_print_msg(RTAPI_MSG_ERR,
+	    "HAL: ERROR: stop_threads in invalid state %d\n", hal_data->state);
+	return -EINVAL;
+    }
+
     hal_data->threads_running = 0;
+    hal_data->state = HAL_S_ACTIVE;
     // rtapi_print_msg(RTAPI_MSG_DBG, "HAL: threads stopped\n");
     return 0;
 }
 
 //RTAPI 实时环境初始化
+// ============================================================================
+// hal_app_main — full HAL subsystem initialisation.
+//
+// Lifecycle: UNINIT -> INITIALIZING -> ACTIVE.
+// On any failure, previously acquired OS resources are rolled back.
+// ============================================================================
 int hal_app_main(void)
 {
     int retval;
@@ -1032,24 +1101,34 @@ int hal_app_main(void)
 		return -EINVAL;
     }
 
+    // State: now INITIALIZING (shared memory obtained, but not yet initialised).
+
 	//内存映射
     /* get address of shared memory area */
     retval = rtapi_shmem_getptr(lib_mem_id, &mem);
     if (retval < 0)
     {
 		rtapi_print_msg(RTAPI_MSG_ERR,"HAL_LIB: ERROR: could not access shared memory\n");
+		// Rollback: release the shared memory segment.
+		rtapi_shmem_delete(lib_mem_id, lib_module_id);
 		rtapi_exit(lib_module_id);
 		return -EINVAL;
     }
     /* set up internal pointers to shared mem and data structure */
     hal_shmem_base = (char *) mem;
     hal_data = (hal_data_t *) mem;
+    // Mark as INITIALIZING before calling init_hal_data().
+    hal_data->state = HAL_S_INITIALIZING;
+    hal_data->error_code = 0;
+
 	//HAL 数据结构初始化
     /* perform a global init if needed */
     retval = init_hal_data();
     if ( retval )
     {
 		rtapi_print_msg(RTAPI_MSG_ERR,"HAL_LIB: ERROR: could not init shared memory\n");
+		// Rollback: release the shared memory segment.
+		rtapi_shmem_delete(lib_mem_id, lib_module_id);
 		rtapi_exit(lib_module_id);
 		return -EINVAL;
     }
@@ -1059,9 +1138,26 @@ int hal_app_main(void)
     return 0;
 }
 
+// ============================================================================
+// hal_app_exit — tears down the entire HAL subsystem.
+//
+// Lifecycle: ACTIVE/RUNNING -> SHUTTING_DOWN -> DESTROYED.
+// Idempotent: if already DESTROYED, returns 0.
+// ============================================================================
 void hal_app_exit(void)
 {
     hal_thread_t *thread;
+
+    // Guard: prevent double-teardown.
+    if (hal_data == NULL) {
+	return;
+    }
+    if (hal_data->state == HAL_S_DESTROYED) {
+	return;
+    }
+
+    // Transition to SHUTTING_DOWN.
+    hal_data->state = HAL_S_SHUTTING_DOWN;
 
     // rtapi_print_msg(RTAPI_MSG_DBG, "HAL_LIB: removing kernel lib\n");
     /* grab mutex before manipulating list */
@@ -1080,8 +1176,104 @@ void hal_app_exit(void)
     /* release RTAPI resources */
     rtapi_shmem_delete(lib_mem_id, lib_module_id);
     rtapi_exit(lib_module_id);
+
+    // State: fully destroyed.
+    hal_data->state = HAL_S_DESTROYED;
     /* done */
     // rtapi_print_msg(RTAPI_MSG_DBG,"HAL_LIB: kernel lib removed successfully\n");
+}
+
+// ============================================================================
+// hal_get_state — returns the current HAL global lifecycle state.
+//
+// Returns one of the HAL_S_* enum values, or HAL_S_UNINIT if hal_data is
+// not yet allocated.
+// ============================================================================
+int hal_get_state(void)
+{
+    if (hal_data == NULL)
+	return HAL_S_UNINIT;
+    return hal_data->state;
+}
+
+// ============================================================================
+// hal_get_stats — fills a caller-supplied hal_stats_t with current HAL
+// subsystem statistics.  The caller is responsible for providing a valid
+// pointer to a hal_stats_t structure.
+//
+// Returns 0 on success, -EINVAL if hal_data is NULL.
+// ============================================================================
+int hal_get_stats(hal_stats_t *stats)
+{
+    if (hal_data == NULL || stats == NULL)
+	return -EINVAL;
+
+    rtapi_mutex_get(&(hal_data->mutex));
+
+    stats->state    = hal_data->state;
+    stats->init_pid = hal_data->init_pid;
+    stats->error_code = hal_data->error_code;
+    stats->threads_running = hal_data->threads_running;
+    stats->shmem_avail = hal_data->shmem_avail;
+    stats->shmem_total = HAL_SIZE;
+
+    // Count components in the linked list.
+    stats->comp_count = 0;
+    {
+	int next = hal_data->comp_list_ptr;
+	while (next != 0) {
+	    hal_comp_t *comp = SHMPTR(next);
+	    stats->comp_count++;
+	    next = comp->next_ptr;
+	}
+    }
+
+    // Count pins in the linked list.
+    stats->pin_count = 0;
+    {
+	int next = hal_data->pin_list_ptr;
+	while (next != 0) {
+	    hal_pin_t *pin = SHMPTR(next);
+	    stats->pin_count++;
+	    next = pin->next_ptr;
+	}
+    }
+
+    // Count parameters in the linked list.
+    stats->param_count = 0;
+    {
+	int next = hal_data->param_list_ptr;
+	while (next != 0) {
+	    hal_param_t *param = SHMPTR(next);
+	    stats->param_count++;
+	    next = param->next_ptr;
+	}
+    }
+
+    // Count functions in the linked list.
+    stats->funct_count = 0;
+    {
+	int next = hal_data->funct_list_ptr;
+	while (next != 0) {
+	    hal_funct_t *funct = SHMPTR(next);
+	    stats->funct_count++;
+	    next = funct->next_ptr;
+	}
+    }
+
+    // Count threads in the linked list.
+    stats->thread_count = 0;
+    {
+	int next = hal_data->thread_list_ptr;
+	while (next != 0) {
+	    hal_thread_t *thread = SHMPTR(next);
+	    stats->thread_count++;
+	    next = thread->next_ptr;
+	}
+    }
+
+    rtapi_mutex_give(&(hal_data->mutex));
+    return 0;
 }
 
 /* this is the main function that implements threads in realtime */
@@ -1194,6 +1386,11 @@ static int init_hal_data(void)
     hal_data->shmem_bot = sizeof(hal_data_t);
     hal_data->shmem_top = HAL_SIZE;
     hal_data->lock = HAL_LOCK_NONE;
+
+    // Initialise lifecycle state and record the creating PID.
+    hal_data->state = HAL_S_ACTIVE;
+    hal_data->init_pid = getpid();
+    hal_data->error_code = 0;
     /* done, release mutex */
     rtapi_mutex_give(&(hal_data->mutex));
     return 0;
@@ -1813,109 +2010,9 @@ hal_thread_t *halpr_find_thread_by_name(const char *name)
 		/* didn't find it yet, look at next one */
 		next = thread->next_ptr;
 	}
-	/* if loop terminates, we reached end of list with no match */
+	/* if loop terminates, we reached end of list without finding a match */
 	return 0;
 }
-
-hal_list_t *list_prev(hal_list_t * entry)
-{
-	/* this function is only needed because of memory mapping */
-	return SHMPTR(entry->prev);
-}
-
-hal_list_t *list_next(hal_list_t * entry)
-{
-	/* this function is only needed because of memory mapping */
-	return SHMPTR(entry->next);
-}
-
-void list_add_after(hal_list_t * entry, hal_list_t * prev)
-{
-	int entry_n, prev_n, next_n;
-	hal_list_t *next;
-
-	/* messiness needed because of memory mapping */
-	entry_n = SHMOFF(entry);
-	prev_n = SHMOFF(prev);
-	next_n = prev->next;
-	next = SHMPTR(next_n);
-	/* insert the entry */
-	entry->next = next_n;
-	entry->prev = prev_n;
-	prev->next = entry_n;
-	next->prev = entry_n;
-}
-
-void list_add_before(hal_list_t * entry, hal_list_t * next) {
-	int entry_n, prev_n, next_n;
-	hal_list_t *prev;
-
-	/* messiness needed because of memory mapping */
-	entry_n = SHMOFF(entry);
-	next_n = SHMOFF(next);
-	prev_n = next->prev;
-	prev = SHMPTR(prev_n);
-	/* insert the entry */
-	entry->next = next_n;
-	entry->prev = prev_n;
-	prev->next = entry_n;
-	next->prev = entry_n;
-}
-
-hal_list_t *list_remove_entry(hal_list_t * entry)
-{
-	int entry_n;
-	hal_list_t *prev, *next;
-
-	/* messiness needed because of memory mapping */
-	entry_n = SHMOFF(entry);
-	prev = SHMPTR(entry->prev);
-	next = SHMPTR(entry->next);
-	/* remove the entry */
-	prev->next = entry->next;
-	next->prev = entry->prev;
-	entry->next = entry_n;
-	entry->prev = entry_n;
-	return next;
-}
-
-void list_init_entry(hal_list_t * entry)
-{
-	int entry_n;
-
-	entry_n = SHMOFF(entry);
-	entry->next = entry_n;
-	entry->prev = entry_n;
-}
-
-
-static int hal_param_newfv(hal_type_t type, hal_param_dir_t dir,
-	void *data_addr, int comp_id, const char *fmt, va_list ap) {
-	char name[HAL_NAME_LEN + 1];
-	int sz;
-	sz = rt_snprintf(name, sizeof(name), fmt, ap);
-	if(sz == -1 || sz > HAL_NAME_LEN) {
-		rtapi_print_msg(RTAPI_MSG_ERR,
-		"hal_param_newfv: length %d too long for name starting '%s'\n",
-		sz, name);
-		return -ENOMEM;
-	}
-	return hal_param_new(name, type, dir, (void *) data_addr, comp_id);
-}
-
-int hal_param_float_newf(hal_param_dir_t dir, hal_float_t * data_addr,
-	int comp_id, const char *fmt, ...)
-{
-	va_list ap;
-	int ret;
-	va_start(ap, fmt);
-	ret = hal_param_newfv(HAL_FLOAT, dir, (void*)data_addr, comp_id, fmt, ap);
-	va_end(ap);
-	return ret;
-}
-
-
-
 
 static hal_pin_t *alloc_pin_struct(void)
 {
@@ -1941,6 +2038,7 @@ static hal_pin_t *alloc_pin_struct(void)
 		p->signal = 0;
 		memset(&p->dummysig, 0, sizeof(hal_data_u));
 		p->name[0] = '\0';
+		p->oldname = 0;
 	}
 	return p;
 }
@@ -1960,20 +2058,18 @@ static void free_pin_struct(hal_pin_t * pin)
 	hal_data->pin_free_ptr = SHMOFF(pin);
 }
 
-int hal_pin_new(const char *name, hal_type_t type, void **data_ptr_addr, int comp_id)
-{
+int hal_pin_new(const char *name, hal_type_t type, void **data_ptr_addr, int comp_id) {
     rtapi_intptr_t *prev, next;
     int cmp;
     hal_pin_t *new, *ptr;
     hal_comp_t *comp;
 
-    if (hal_data == 0)
-    {
-		rtapi_print_msg(RTAPI_MSG_ERR,
-		    "HAL: ERROR: pin_new called before init\n");
-		return -EINVAL;
-    }
 
+    if (hal_data == 0) {
+	rtapi_print_msg(RTAPI_MSG_ERR,
+	    "HAL: ERROR: pin_new called before init\n");
+	return -EINVAL;
+    }
     if(*data_ptr_addr)
     {
         rtapi_print_msg(RTAPI_MSG_ERR, "HAL: ERROR: pin_new(%s) called with already-initialized memory\n", name);
@@ -2074,4 +2170,3 @@ int hal_pin_new(const char *name, hal_type_t type, void **data_ptr_addr, int com
 	next = *prev;
     }
 }
-

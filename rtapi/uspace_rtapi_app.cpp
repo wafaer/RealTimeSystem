@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <dlfcn.h>
 #include <signal.h>
+#include <semaphore.h>
 #include <vector>
 #include <string>
 #include <map>
@@ -104,7 +105,11 @@ rtapi_task::rtapi_task()
     : magic{}, id{}, owner{}, uses_fp{}, stacksize{}, prio{},
       period{}, nextstart{},
       ratio{}, pll_correction{}, pll_correction_limit{},
-      arg{}, taskcode{}
+      arg{}, taskcode{},
+
+      state(TASK_S_EMPTY),
+      owner_pid(0),
+      error_code(0)
 
 {}
 
@@ -112,10 +117,22 @@ namespace
 {
 struct PosixTask : rtapi_task
 {
-    PosixTask() : rtapi_task{}, thr{}
-    {}
+    PosixTask() : rtapi_task{}, thr{}, pause_sem{}, resume_sem{}
+    {
+        sem_init(&pause_sem, 0, 0);
+        sem_init(&resume_sem, 0, 0);
+    }
+    ~PosixTask()
+    {
+        sem_destroy(&pause_sem);
+        sem_destroy(&resume_sem);
+    }
 
-    pthread_t thr; /* thread's context */
+    pthread_t thr;       // POSIX thread handle.
+    sem_t pause_sem;     // Posted by task_pause() to request a pause;
+                         // consumed by the task thread in rtapi_wait().
+    sem_t resume_sem;    // Posted by task_resume() to signal the task
+                         // thread to continue after a pause.
 };
 
 struct Posix : RtapiApp
@@ -133,6 +150,7 @@ struct Posix : RtapiApp
     int task_self();
     long long task_pll_get_reference(void);
     int task_pll_set_correction(long value);
+    int task_pll_get_correction(long *value);
     void wait();
     struct rtapi_task *do_task_new() {
         return new PosixTask;
@@ -240,6 +258,14 @@ int RtapiApp::allocate_task_id()
     return -ENOSPC;
 }
 
+// ============================================================================
+// RtapiApp::task_new — allocates and initialises a real-time task structure.
+//
+// Lifecycle transition: EMPTY (CAS) -> INIT (CAS) -> ALLOCATED.
+//
+// The caller receives a task_id that can be passed to task_start().
+// owner_pid is recorded for cross-process diagnostics.
+// ============================================================================
 int RtapiApp::task_new(void (*taskcode) (void*), void *arg,
         int prio, int owner, unsigned long int stacksize, int uses_fp) {
   /* check requested priority */
@@ -262,6 +288,9 @@ int RtapiApp::task_new(void (*taskcode) (void*), void *arg,
   task->taskcode = taskcode;
   task->prio = prio;
   task->magic = TASK_MAGIC;
+  task->owner_pid = getpid();
+  task->error_code = 0;
+  task->state = TASK_S_ALLOCATED;
   task_array[n] = task;
 
   /* and return handle to the caller */
@@ -292,16 +321,41 @@ void RtapiApp::unexpected_realtime_delay(rtapi_task *task, int /*nperiod*/) {
     }
 }
 
+// ============================================================================
+// Posix::task_delete — cancels and joins the task thread, then releases all
+// resources (semaphores, object, array slot).
+//
+// The function is idempotent: a task in DELETED state returns -EALREADY.
+// If the task is paused at deletion time, the resume semaphore is posted
+// first to unblock the thread so cancellation can proceed.
+// ============================================================================
 int Posix::task_delete(int id)
 {
   auto task = ::rtapi_get_task<PosixTask>(id);
   if(!task) return -EINVAL;
 
+  // Guard: already deleted or never fully allocated.
+  if (task->state == TASK_S_DELETED)
+    return -EALREADY;
+  if (task->state == TASK_S_EMPTY || task->state == TASK_S_INIT)
+    return -EINVAL;
+
+  // If the task is currently paused, wake it so pthread_cancel can take
+  // effect at the next cancellation point (rtapi_wait → pthread_testcancel).
+  if (task->state == TASK_S_PAUSED) {
+    sem_post(&task->resume_sem);
+  }
+
   pthread_cancel(task->thr);
   pthread_join(task->thr, 0);
+
   task->magic = 0;
+  task->state = TASK_S_DELETED;
   task_array[id] = 0;
+
+  // PosixTask destructor will sem_destroy the semaphores.
   delete task;
+
   return 0;
 }
 
@@ -353,10 +407,30 @@ static int find_rt_cpu_number() {
 #endif
 }
 
+// ============================================================================
+// Posix::task_start — creates the POSIX thread for a previously allocated
+// task and transitions it to RUNNING state.
+//
+// State gate: only ALLOCATED tasks may be started.  Re-starting a RUNNING
+// task returns -EALREADY.
+//
+// On failure, the state is left in ALLOCATED so that task_delete() can
+// cleanly tear down the PosixTask (including semaphore destruction).
+// ============================================================================
 int Posix::task_start(int task_id, unsigned long int period_nsec)
 {
   auto task = ::rtapi_get_task<PosixTask>(task_id);
   if(!task) return -EINVAL;
+
+  // State gate: prevent double-start and invalid-state starts.
+  if (task->state == TASK_S_RUNNING)
+    return -EALREADY;
+  if (task->state != TASK_S_ALLOCATED) {
+    rtapi_print_msg(RTAPI_MSG_ERR,
+        "task_start: task %d in state %d, expected ALLOCATED (%d)\n",
+        task_id, task->state, TASK_S_ALLOCATED);
+    return -EINVAL;
+  }
 
 //   if(period_nsec < (unsigned long)period) period_nsec = (unsigned long)period;
   task->period = period_nsec;
@@ -374,16 +448,30 @@ int Posix::task_start(int task_id, unsigned long int period_nsec)
 
   pthread_attr_t attr;
   int ret;
-  if((ret = pthread_attr_init(&attr)) != 0)
+  if((ret = pthread_attr_init(&attr)) != 0) {
+      task->error_code = ret;
       return -ret;
-  if((ret = pthread_attr_setstacksize(&attr, task->stacksize)) != 0)
+  }
+  if((ret = pthread_attr_setstacksize(&attr, task->stacksize)) != 0) {
+      task->error_code = ret;
+      pthread_attr_destroy(&attr);
       return -ret;
-  if((ret = pthread_attr_setschedpolicy(&attr, policy)) != 0)
+  }
+  if((ret = pthread_attr_setschedpolicy(&attr, policy)) != 0) {
+      task->error_code = ret;
+      pthread_attr_destroy(&attr);
       return -ret;
-  if((ret = pthread_attr_setschedparam(&attr, &param)) != 0)
+  }
+  if((ret = pthread_attr_setschedparam(&attr, &param)) != 0) {
+      task->error_code = ret;
+      pthread_attr_destroy(&attr);
       return -ret;
-  if((ret = pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED)) != 0)
+  }
+  if((ret = pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED)) != 0) {
+      task->error_code = ret;
+      pthread_attr_destroy(&attr);
       return -ret;
+  }
   if(nprocs > 1) {
       const static int rt_cpu_number = find_rt_cpu_number();
     //   rtapi_print_msg(RTAPI_MSG_INFO, "rt_cpu_number %d\n", rt_cpu_number);
@@ -395,13 +483,27 @@ int Posix::task_start(int task_id, unsigned long int period_nsec)
 #endif
           CPU_ZERO(&cpuset);
           CPU_SET(rt_cpu_number, &cpuset);
-          if((ret = pthread_attr_setaffinity_np(&attr, sizeof(cpuset), &cpuset)) != 0)
+          if((ret = pthread_attr_setaffinity_np(&attr, sizeof(cpuset), &cpuset)) != 0) {
+               task->error_code = ret;
+               pthread_attr_destroy(&attr);
                return -ret;
+          }
       }
   }
-  if((ret = pthread_create(&task->thr, &attr, &wrapper, reinterpret_cast<void*>(task))) != 0)
-      return -ret;
 
+  // State transition: ALLOCATED -> RUNNING before pthread_create so that
+  // task_pause/task_delete can safely reference the task during startup.
+  task->state = TASK_S_RUNNING;
+
+  if((ret = pthread_create(&task->thr, &attr, &wrapper, reinterpret_cast<void*>(task))) != 0) {
+      // Rollback state on pthread_create failure.
+      task->state = TASK_S_ALLOCATED;
+      task->error_code = ret;
+      pthread_attr_destroy(&attr);
+      return -ret;
+  }
+
+  pthread_attr_destroy(&attr);
   return 0;
 }
 
@@ -424,7 +526,7 @@ void *Posix::wrapper(void *arg)
 //   main->period = main->ratio * period;
     // main->period = period;
   rtapi_print_msg(RTAPI_MSG_INFO, "main %p period = %lu ratio=%u\n",
-	  task, task->period, task->ratio);
+ 	  task, task->period, task->ratio);
 
   pthread_setspecific(key, arg);
   set_namef("rtapi_app:T#%d", task->id);
@@ -459,12 +561,57 @@ int Posix::task_pll_set_correction(long value) {
     return 0;
 }
 
-int Posix::task_pause(int) {
-    return -ENOSYS;
+// ============================================================================
+// Posix::task_pll_get_correction — retrieves the current PLL correction
+// value for the calling task thread.
+//
+// Must be called from within the task thread (uses TLS key lookup).
+// ============================================================================
+int Posix::task_pll_get_correction(long *value) {
+    struct rtapi_task *task = reinterpret_cast<rtapi_task*>(pthread_getspecific(key));
+    if(!task) return -EINVAL;
+    *value = task->pll_correction;
+    return 0;
 }
 
-int Posix::task_resume(int) {
-    return -ENOSYS;
+// ============================================================================
+// Posix::task_pause — requests a running task to pause at its next
+// rtapi_wait() call.
+//
+// The external thread (typically the main control thread) posts the task's
+// pause_sem.  The task thread, inside rtapi_wait(), detects the semaphore
+// and blocks on resume_sem until task_resume() is called.
+//
+// Returns:
+//   0         on success (pause request posted).
+//   -EINVAL   if task_id is invalid or the task is not in RUNNING state.
+// ============================================================================
+int Posix::task_pause(int task_id) {
+    auto task = ::rtapi_get_task<PosixTask>(task_id);
+    if(!task) return -EINVAL;
+    if(task->state != TASK_S_RUNNING) return -EINVAL;
+
+    task->state = TASK_S_PAUSED;
+    sem_post(&task->pause_sem);
+    return 0;
+}
+
+// ============================================================================
+// Posix::task_resume — wakes a paused task so it continues its real-time
+// loop.
+//
+// Returns:
+//   0         on success (resume signal posted).
+//   -EINVAL   if task_id is invalid or the task is not in PAUSED state.
+// ============================================================================
+int Posix::task_resume(int task_id) {
+    auto task = ::rtapi_get_task<PosixTask>(task_id);
+    if(!task) return -EINVAL;
+    if(task->state != TASK_S_PAUSED) return -EINVAL;
+
+    sem_post(&task->resume_sem);
+    // The task thread will set state back to RUNNING when it wakes up.
+    return 0;
 }
 
 int Posix::task_self() {
@@ -473,11 +620,34 @@ int Posix::task_self() {
     return task->id;
 }
 
+// ============================================================================
+// Posix::wait — the real-time cycle synchronisation point.
+//
+// Called by the task thread at the end of each iteration.  The thread:
+//   1. Checks for a pause request (via pause_sem) and blocks if paused.
+//   2. Checks for cancellation (pthread_testcancel).
+//   3. Advances nextstart by period + pll_correction.
+//   4. Sleeps until the absolute nextstart time.
+// ============================================================================
 void Posix::wait() {
     if(do_thread_lock)
         pthread_mutex_unlock(&thread_lock);
     pthread_testcancel();
+
     struct rtapi_task *task = reinterpret_cast<rtapi_task*>(pthread_getspecific(key));
+
+    // Check for a pause request from an external thread.  sem_trywait is
+    // non-blocking: it returns 0 if a token was consumed (pause requested),
+    // or -1 with errno==EAGAIN if no pause request is pending.
+    PosixTask *ptask = static_cast<PosixTask*>(task);
+    if (sem_trywait(&ptask->pause_sem) == 0) {
+        // State is already TASK_S_PAUSED (set by task_pause).  Block until
+        // task_resume posts the resume semaphore.
+        sem_wait(&ptask->resume_sem);
+        // Back to running.
+        ptask->state = TASK_S_RUNNING;
+    }
+
     rtapi_timespec_advance(task->nextstart, task->nextstart, task->period + task->pll_correction);
     struct timespec now;
     clock_gettime(RTAPI_CLOCK, &now);
@@ -630,6 +800,31 @@ int rtapi_task_pll_set_correction(long value)
     return App().task_pll_set_correction(value);
 }
 
+// ============================================================================
+// rtapi_task_pll_get_correction — thin C wrapper around the C++ PLL getter.
+// ============================================================================
+int rtapi_task_pll_get_correction(long *value)
+{
+    return App().task_pll_get_correction(value);
+}
+
+// ============================================================================
+// rtapi_task_getstate — returns the current lifecycle state of a task.
+//
+// Returns one of the TASK_S_* enum values, or TASK_S_ERROR on invalid input.
+// ============================================================================
+int rtapi_task_getstate(int task_id)
+{
+    if (task_id < 0 || task_id >= MAX_TASKS)
+        return TASK_S_ERROR;
+
+    rtapi_task *task = task_array[task_id];
+    if (!task || task->magic != TASK_MAGIC)
+        return TASK_S_ERROR;
+
+    return task->state;
+}
+
 void rtapi_wait(void)
 {
     App().wait();
@@ -760,12 +955,12 @@ int rtapi_clock_nanosleep(clockid_t clock_id, int flags,
 #undef timespecsub
 #define	timespecsub(tvp, uvp, vvp)					\
 do {								\
-(vvp)->tv_sec = (tvp)->tv_sec - (uvp)->tv_sec;		\
-(vvp)->tv_nsec = (tvp)->tv_nsec - (uvp)->tv_nsec;	\
-if ((vvp)->tv_nsec < 0) {				\
-(vvp)->tv_sec--;				\
-(vvp)->tv_nsec += 1000000000;			\
-}							\
+ (vvp)->tv_sec = (tvp)->tv_sec - (uvp)->tv_sec;		\
+ (vvp)->tv_nsec = (tvp)->tv_nsec - (uvp)->tv_nsec;	\
+ if ((vvp)->tv_nsec < 0) {				\
+ (vvp)->tv_sec--;				\
+ (vvp)->tv_nsec += 1000000000;			\
+ }							\
 } while (0)
     struct timespec request;
     timespecsub(prequest, pnow, &request);
