@@ -303,20 +303,6 @@ void task_config_change(void)
 
 
 // ============================================================================
-// updata_axis_param — update per-axis runtime parameters.
-//
-// Called periodically from the user-space control loop to refresh
-// axis-specific data (e.g. from encoder feedback).  In the example
-// this is a no-op diagnostic.
-// ============================================================================
-void updata_axis_param(int numAxes)
-{
-    rtapi_print_msg(RTAPI_MSG_DBG,
-        "task: updata_axis_param called for %d axes\n", numAxes);
-}
-
-
-// ============================================================================
 // taskSetCycleTime — set the top-level cycle time and propagate to
 // sub-cycle times.
 // ============================================================================
@@ -444,59 +430,4 @@ static int init_task_threads(void)
         "task: thread initialisation complete\n");
 
     return 0;
-}
-
-
-// ============================================================================
-// task_print_hal_status — diagnostic helper that prints the current HAL
-// global state and statistics using hal_get_state() and hal_get_stats().
-// ============================================================================
-void task_print_hal_status(void)
-{
-    int state = hal_get_state();
-    hal_stats_t stats;
-
-    const char *state_names[] = {
-        "UNINIT", "INITIALIZING", "ACTIVE", "RUNNING",
-        "SHUTTING_DOWN", "DESTROYED", "ERROR"
-    };
-    const char *state_str = (state >= 0 && state <= 5) ? state_names[state]
-                                                       : "UNKNOWN";
-
-    rtapi_print_msg(RTAPI_MSG_INFO,
-        "task: HAL state = %s (%d)\n", state_str, state);
-
-    if (hal_get_stats(&stats) == 0) {
-        rtapi_print_msg(RTAPI_MSG_INFO,
-            "task: HAL stats — comps=%d  pins=%d  params=%d  "
-            "functs=%d  threads=%d  running=%d  "
-            "shmem=%ld/%ld  init_pid=%d  error=%d\n",
-            stats.comp_count, stats.pin_count, stats.param_count,
-            stats.funct_count, stats.thread_count, stats.threads_running,
-            stats.shmem_avail, stats.shmem_total,
-            (int)stats.init_pid, stats.error_code);
-    }
-}
-
-
-// ============================================================================
-// task_print_shmem_state — diagnostic helper that prints the current
-// lifecycle state of the application shared memory segment using
-// rtapi_shmem_getstate().
-// ============================================================================
-void task_print_shmem_state(void)
-{
-    if (emc_shmem_id > 0) {
-        int st = rtapi_shmem_getstate(emc_shmem_id);
-        const char *names[] = {
-            "UNBORN", "CREATED", "ATTACHED", "ACTIVE",
-            "DETACHED", "DESTROYED"
-        };
-        const char *s = (st >= 0 && st <= 5) ? names[st] : "ERROR";
-        rtapi_print_msg(RTAPI_MSG_INFO,
-            "task: shmem state = %s (%d)\n", s, st);
-    } else {
-        rtapi_print_msg(RTAPI_MSG_INFO,
-            "task: shmem not yet allocated\n");
-    }
 }

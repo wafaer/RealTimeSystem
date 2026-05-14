@@ -64,9 +64,8 @@ set(MOTRO_CONTROL_SOURCES
     main/taskmain.cpp
 
     # Stubs for external symbols from the full LinuxCNC codebase
-    main/stubs.cpp
 
-    # HAL — Hardware Abstraction Layer (C)
+        # HAL — Hardware Abstraction Layer (C)
     hal/hal_lib.c
 
     # RTAPI — Real-Time API userspace layer
@@ -85,6 +84,10 @@ set(MOTRO_CONTROL_HEADERS
     rtapi/rtapi_uspace.h
     rtapi/uspace_common.h
     rtapi/rtapi.h
+        time/timer.h
+        time/timer.cpp
+        time/_timer.h
+        time/_timer.cpp
 )
 
 add_executable(SoemMotroControl ${MOTRO_CONTROL_SOURCES} ${MOTRO_CONTROL_HEADERS})

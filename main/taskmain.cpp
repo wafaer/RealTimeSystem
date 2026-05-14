@@ -1,26 +1,9 @@
-//
-// main/taskmain.cpp — main entry point and full-program lifecycle manager.
-//
-// This file is the root of the entire real-time control application.
-// Its responsibilities are:
-//   1. Initialise the RTAPI subsystem.
-//   2. Initialise the HAL subsystem (hal_init, pins, shared memory).
-//   3. Initialise and start the ExampleTask (task_thread_main).
-//   4. Run the main control loop — monitor latency, service NML.
-//   5. On shutdown (SIGINT / SIGTERM / normal exit):
-//        a. Stop real-time threads               (hal_stop_threads).
-//        b. Tear down the ExampleTask            (task_thread_exit).
-//        c. Release RTAPI resources              (rtapi_exit).
-//        d. Flush the log queue                  (stopprintf).
-//
-// Cleanup is guaranteed regardless of the exit path — both normal exit and
-// signal-triggered shutdown go through the same teardown sequence.
-//
-
 #include <csignal>
 #include <cstdlib>
 #include <cstdio>
 #include <cfloat>
+#include <sys/time.h>
+#include "../time/timer.h"
 
 extern "C" {
 #include "rtapi/rtapi.h"
@@ -28,27 +11,19 @@ extern "C" {
 }
 #include "ExampleTask/task.h"
 
-// ---------------------------------------------------------------------------
-// Global state
-// ---------------------------------------------------------------------------
-volatile int done = 0;              // Set to 1 by signal handlers to request
-                                    // a clean shutdown.
+volatile int done = 0;
 
-static int task_initialised = 0;    // Non-zero after task_thread_main succeeds.
-static int threads_started  = 0;    // Non-zero after hal_start_threads succeeds.
+static RCS_TIMER *timer = 0;
+static int task_initialised = 0;
+static int threads_started  = 0;
 
-// ---------------------------------------------------------------------------
-// Forward declarations
-// ---------------------------------------------------------------------------
+static int emcTaskNoDelay = 0;
+static int emcTaskEager = 0;
+
 static void emctask_quit(int sig);
 static int  emctask_shutdown(void);
 static int  emctask_startup(void);
 
-// ---------------------------------------------------------------------------
-// Signal handler — sets the done flag so the main loop exits cleanly.
-// The actual shutdown work is deferred to the end of main() so that all
-// resources are freed in the correct order.
-// ---------------------------------------------------------------------------
 static void emctask_quit(int sig)
 {
     // Prevent recursive signal delivery.
@@ -75,12 +50,6 @@ static void emctask_quit(int sig)
     in_handler = 0;
 }
 
-// ---------------------------------------------------------------------------
-// emctask_shutdown — unified teardown.
-//
-// Idempotent: safe to call multiple times (each step is guarded).
-// Order matters: threads must stop before shared memory is released.
-// ---------------------------------------------------------------------------
 static int emctask_shutdown(void)
 {
     // Phase 1 — stop real-time threads.
@@ -107,26 +76,15 @@ static int emctask_shutdown(void)
 
     // Phase 4 — delete the timer.
     {
-        extern void *timer;
         if (timer) {
-            timer = NULL;
+            delete timer;
+            timer = 0;
         }
     }
 
     return 0;
 }
 
-// ---------------------------------------------------------------------------
-// emctask_startup — initialise all subsystems.
-//
-// Call sequence:
-//   task_thread_main  → HAL registration + pins + shared mem + thread.
-//   emcMotionUpdate   → verify NML communication is live (retry loop).
-//
-// Returns 0 on success, -1 on any failure.
-// Each failure point calls emctask_shutdown() to roll back previously
-// acquired resources.
-// ---------------------------------------------------------------------------
 static int emctask_startup(void)
 {
     double end;
@@ -135,66 +93,31 @@ static int emctask_startup(void)
     #define RETRY_TIME     10.0   // seconds to wait for subsystems.
     #define RETRY_INTERVAL  1.0   // seconds between retries.
 
-    // Phase 1 — create the cycle timer.
+    if (printfMaster() !=0)
     {
-        extern int emcTaskNoDelay;
-        extern void *timer;
-        if (!emcTaskNoDelay) {
-            // In the original this is 'new RCS_TIMER(...)'.
-            // Keep the same logic.
-            timer = (void*)(1);  // Placeholder: replace with actual RCS_TIMER
-        }
+        return -1;
+    }
+
+    //初始化hal
+    if(hal_app_main() != 0)
+    {
+        return -1;
+    }
+
+    // get the timer
+    if (!emcTaskNoDelay)
+    {
+        timer = new RCS_TIMER(0.1, "", "");
     }
 
     // Phase 2 — initialise the task (HAL comp, pins, shared mem, threads).
     if (task_thread_main() != 0) {
-        rtapi_print_msg(RTAPI_MSG_ERR,
-            "main: task_thread_main() failed\n");
+        rtapi_print_msg(RTAPI_MSG_ERR, "main: task_thread_main() failed\n");
         emctask_shutdown();
         return -1;
     }
+
     task_initialised = 1;
-
-    // Print initial diagnostics.
-    task_print_hal_status();
-    task_print_shmem_state();
-
-    // Phase 3 — poll the NML motion subsystem until it comes alive.
-    end  = RETRY_TIME;
-    good = 0;
-    do {
-        extern int emcMotionUpdate(void);
-        if (0 == emcMotionUpdate()) {
-            good = 1;
-            break;
-        }
-        extern int esleep(double);
-        esleep(RETRY_INTERVAL);
-        end -= RETRY_INTERVAL;
-        if (done) {
-            emctask_shutdown();
-            return -1;
-        }
-    } while (end > 0.0);
-
-    if (!good) {
-        rtapi_print_msg(RTAPI_MSG_ERR,
-            "main: can't read ExampleTask status "
-            "(NML subsystem did not respond)\n");
-        emctask_shutdown();
-        return -1;
-    }
-
-    if (done) {
-        emctask_shutdown();
-        return -1;
-    }
-
-    // Phase 4 — update axis parameters from external configuration.
-    {
-        extern int num_axis;
-        updata_axis_param(num_axis);
-    }
 
     rtapi_print_msg(RTAPI_MSG_INFO,
         "main: startup complete — ready to start threads\n");
@@ -202,9 +125,6 @@ static int emctask_startup(void)
     return 0;
 }
 
-// ---------------------------------------------------------------------------
-// main — program entry point.
-// ---------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
     double startTime, endTime, deltaTime;
@@ -217,9 +137,6 @@ int main(int argc, char *argv[])
     (void)argc;
     (void)argv;
 
-    // Register signal handlers before any initialisation so that a SIGTERM
-    // during startup triggers the done flag and the startup retry loops
-    // will bail out cleanly.
     done = 0;
     signal(SIGINT,  emctask_quit);
     signal(SIGTERM, emctask_quit);
@@ -250,12 +167,6 @@ int main(int argc, char *argv[])
     maxTime   = 0.0;
 
     while (!done) {
-        // Service the NML motion subsystem.
-        {
-            extern int emcMotionUpdate(void);
-            emcMotionUpdate();
-        }
-
         // Measure and track iteration latency.
         endTime   = etime();
         deltaTime = endTime - startTime;
@@ -283,10 +194,8 @@ int main(int argc, char *argv[])
             }
         }
 
-        // Periodically print diagnostics (every ~1000 iterations).
         cycle_counter++;
         if ((cycle_counter % 1000) == 0) {
-            task_print_hal_status();
             if (taskShared) {
                 rtapi_print_msg(RTAPI_MSG_INFO,
                     "main: heartbeat=%d  cycles=%d  "
@@ -297,16 +206,12 @@ int main(int argc, char *argv[])
             }
         }
 
-        // Wait for the next cycle.
         {
-            extern int emcTaskNoDelay;
-            extern int emcTaskEager;
-            extern void *timer;
             if ((emcTaskNoDelay) || (emcTaskEager)) {
                 emcTaskEager = 0;
             } else {
                 if (timer) {
-                    // Original: timer->wait()
+                    timer->wait();
                 }
             }
         }
@@ -326,13 +231,9 @@ int main(int argc, char *argv[])
         threads_started = 0;
     }
 
-    // Flush remaining log messages.
     stopprintf();
 
-    // Tear down all subsystems — this releases the app shared memory,
-    // deregisters from HAL, and releases RTAPI resources.
     emctask_shutdown();
 
-    // and leave
     exit(0);
 }

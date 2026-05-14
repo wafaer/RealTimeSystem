@@ -91,11 +91,8 @@ extern int num_axis;
 // Public API (implemented in task.c).
 int task_thread_main(void);
 void task_thread_exit(void);
-void updata_axis_param(int numAxes);
 void task_config_change(void);
 void taskSetCycleTime(unsigned long nsec);
-void task_print_hal_status(void);
-void task_print_shmem_state(void);
 
 // Realtime functions (registered with HAL).
 extern void taskController(void *arg, long period);
