@@ -82,7 +82,6 @@ extern int hal_del_funct_from_thread(const char *funct_name, const char *thread_
 extern int hal_start_threads(void);
 extern int hal_stop_threads(void);
 extern int hal_get_state(void);
-extern int hal_get_stats(struct hal_stats_t *stats);
 
 typedef int(*constructor)(char *prefix, char *arg);
 

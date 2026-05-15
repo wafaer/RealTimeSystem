@@ -11,7 +11,6 @@
 #include "rtapi/rtapi.h"
 
 extern uid_t ruid;
-extern RING_BUFF_t UsartTxRingBuff;
 extern sem_t sem_count_usart_tx;
 
 static msg_level_t msg_level = RTAPI_MSG_ALL;

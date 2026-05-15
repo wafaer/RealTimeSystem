@@ -11,6 +11,8 @@ extern "C" {
 }
 #include "ExampleTask/task.h"
 
+#define DEFAULT_EMC_TASK_CYCLE_TIME 0.100
+
 volatile int done = 0;
 
 static RCS_TIMER *timer = 0;
@@ -179,7 +181,6 @@ int main(int argc, char *argv[])
 
         // Warn if the iteration time is abnormally long.
         if (!getenv((char*)"QUIET_TASK")) {
-            extern double DEFAULT_EMC_TASK_CYCLE_TIME;
             if (deltaTime > (latency_excursion_factor *
                              DEFAULT_EMC_TASK_CYCLE_TIME)) {
                 if (num_latency_warnings < 10) {

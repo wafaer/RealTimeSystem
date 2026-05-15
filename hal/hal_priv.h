@@ -1,7 +1,3 @@
-//
-// Created by Administrator on 2025/8/16.
-//
-
 #ifndef HAL_PRIV_H
 #define HAL_PRIV_H
 
@@ -87,6 +83,7 @@ typedef struct hal_thread_t hal_thread_t;
 typedef struct hal_param_t hal_param_t;
 typedef struct hal_funct_t hal_funct_t;
 typedef struct hal_funct_entry_t hal_funct_entry_t;
+typedef struct hal_pin_t hal_pin_t;
 
 typedef enum
 {
@@ -96,24 +93,6 @@ typedef enum
     COMPONENT_TYPE_OTHER
 } component_type_t;
 
-// ---------------------------------------------------------------------------
-// HAL global lifecycle state machine.
-//
-// The HAL subsystem transitions through:
-//
-//   UNINIT -> INITIALIZING -> ACTIVE <-> RUNNING
-//                |               |           |
-//                v               v           v
-//              ERROR      SHUTTING_DOWN -> DESTROYED
-//
-// - UNINIT:        hal_data == NULL; no shared memory allocated.
-// - INITIALIZING:  shmget() succeeded, init_hal_data() in progress.
-// - ACTIVE:        Fully initialised; threads may be created/deleted.
-// - RUNNING:       threads_running == 1; real-time threads are executing.
-// - SHUTTING_DOWN: hal_app_exit() in progress; threads being torn down.
-// - DESTROYED:     Shared memory released; hal_data invalid.
-// - ERROR:         Non-recoverable error during initialisation.
-// ---------------------------------------------------------------------------
 typedef enum {
     HAL_S_UNINIT        = 0,  // No shared memory allocated.
     HAL_S_INITIALIZING  = 1,  // shmget succeeded, init_hal_data in progress.
@@ -253,28 +232,16 @@ struct hal_funct_entry_t {
 };
 
 void list_init_entry(hal_list_t * entry);
+hal_list_t *list_prev(hal_list_t * entry);
+hal_list_t *list_next(hal_list_t * entry);
+void list_add_after(hal_list_t * entry, hal_list_t * prev);
+void list_add_before(hal_list_t * entry, hal_list_t * next);
+hal_list_t *list_remove_entry(hal_list_t * entry);
 
-static __inline__ hal_list_t *list_next(hal_list_t * entry) {
-    if (entry == (hal_list_t*)(-1))
-	return 0;
-    return SHMPTR(entry->next);
-}
-static __inline__ hal_list_t *list_prev(hal_list_t * entry) {
-    if (entry == (hal_list_t*)(-1))
-	return 0;
-    return SHMPTR(entry->prev);
-}
-static __inline__ void list_add_after(hal_list_t * new_entry,
-    hal_list_t * list_entry) {
-    new_entry->next = list_entry->next;
-    new_entry->prev = SHMOFF(list_entry);
-    list_entry->next = SHMOFF(new_entry);
-    SHMPTR(new_entry->next)->prev = SHMOFF(new_entry);
-}
-static __inline__ hal_list_t *list_remove_entry(hal_list_t * entry) {
-    SHMPTR(entry->next)->prev = entry->prev;
-    SHMPTR(entry->prev)->next = entry->next;
-    return SHMPTR(entry->next);
-}
+extern hal_comp_t *halpr_find_comp_by_name(const char *name);
+extern hal_thread_t *halpr_find_thread_by_name(const char *name);
+extern hal_funct_t *halpr_find_funct_by_name(const char *name);
+extern hal_comp_t *halpr_find_comp_by_id(int id);
+
 
 #endif //HAL_PRIV_H

@@ -1,16 +1,3 @@
-//
-// funct_command.c — real-time command handler for the ExampleTask.
-//
-// This function is executed once per real-time cycle (before the controller)
-// by the example-thread.  It reads pending commands from the shared memory
-// command channel protected by command_mutex, processes them, and clears
-// the channel for the next command.
-//
-// Synchronisation: rtapi_mutex_try() is used on the real-time side so that
-// the thread never blocks waiting for the user-space writer.  If the lock is
-// held, the function returns immediately and retries on the next cycle.
-//
-#include <osal.h>
 #include <stdlib.h>
 #include <time.h>
 #include "task.h"

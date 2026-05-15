@@ -34,6 +34,15 @@ static long subtask_period_nsec = 0;
 int base_thread_fp = 0;
 
 // ---------------------------------------------------------------------------
+// Forward declarations of module-local functions
+// ---------------------------------------------------------------------------
+static int init_task_comm_buffers(void);
+static int init_hal_param(void);
+static int settaskCycleTime(double secs);
+static int setsubtaskCycleTime(double secs);
+static int init_task_threads(void);
+
+// ---------------------------------------------------------------------------
 // Module interface stubs — called during initialisation to register
 // callbacks and data pointers with downstream subsystems.
 // ---------------------------------------------------------------------------
@@ -70,9 +79,6 @@ int task_thread_main(void)
         return -1;
     }
 
-    // Print initial HAL status for diagnostics.
-    task_print_hal_status();
-
     // Phase 2 — validate configuration.
     if ((num_axis < 1) || (num_axis > MAX_AXES)) {
         rtapi_print_msg(RTAPI_MSG_ERR,
@@ -99,9 +105,6 @@ int task_thread_main(void)
         hal_exit(mot_comp_id);
         return -1;
     }
-
-    // Print shared memory lifecycle state for diagnostics.
-    task_print_shmem_state();
 
     // Phase 5 — register downstream interface callbacks.
     module_intfc();
@@ -143,10 +146,6 @@ void task_thread_exit(void)
             "task: hal_stop_threads() failed, returned %d\n", retval);
     }
 
-    // Phase 2 — release application shared memory.
-    // rtapi_shmem_delete is idempotent: safe to call even if already
-    // detached or not mapped.
-    task_print_shmem_state();  // Diagnostics before deletion.
     retval = rtapi_shmem_delete(emc_shmem_id, mot_comp_id);
     if (retval < 0) {
         rtapi_print_msg(RTAPI_MSG_ERR,
@@ -165,12 +164,6 @@ void task_thread_exit(void)
 }
 
 
-// ============================================================================
-// init_task_comm_buffers — allocate and initialise the application-level
-// shared memory segment for the command channel.
-//
-// Lifecycle: rtapi_shmem_new → getptr → initialise fields → getstate check.
-// ============================================================================
 static int init_task_comm_buffers(void)
 {
     int retval;

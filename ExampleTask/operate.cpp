@@ -63,12 +63,6 @@ public:
     // Returns 0 on success, -1 if the shared memory is not mapped.
     int send_command(task_command_id_t cmd, int data);
 
-    // Print a consolidated diagnostic report:
-    //   - HAL state + stats (hal_get_state / hal_get_stats).
-    //   - Shared memory lifecycle state (rtapi_shmem_getstate).
-    //   - Task heartbeat and cycle count (from shared memory).
-    void print_stats();
-
     // Shut down the task:  stop threads, release shared memory, deregister
     // from HAL.  Idempotent.
     void shutdown();
@@ -127,8 +121,6 @@ int ExampleTaskGuard::start()
     }
     started_ = true;
 
-    // Print initial statistics after startup.
-    print_stats();
 
     return 0;
 }
@@ -165,24 +157,6 @@ int ExampleTaskGuard::send_command(task_command_id_t cmd, int data)
     rtapi_mutex_give(&taskShared->command_mutex);
 
     return 0;
-}
-
-
-void ExampleTaskGuard::print_stats()
-{
-    if (owns_) {
-        task_print_hal_status();
-        task_print_shmem_state();
-    }
-
-    if (taskShared) {
-        // Only log to stdout here (non-real-time path, ok to use printf).
-        std::printf("  [ExampleTask] heartbeat=%d  cycles=%d  "
-                    "last_wakeup=%lld ns\n",
-                    taskShared->heartbeat,
-                    taskShared->cycle_count,
-                    taskShared->last_wakeup_ns);
-    }
 }
 
 
