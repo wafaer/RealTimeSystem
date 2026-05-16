@@ -2,6 +2,8 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cfloat>
+#include <cerrno>
+#include <unistd.h>
 #include <sys/time.h>
 #include "../time/timer.h"
 
@@ -28,28 +30,26 @@ static int  emctask_startup(void);
 
 static void emctask_quit(int sig)
 {
-    // Prevent recursive signal delivery.
-    static int in_handler = 0;
-    if (in_handler) {
-        // Second signal — force immediate exit.
-        _exit(1);
-    }
-    in_handler = 1;
-
-    // Signal the main loop to stop.
+    (void)sig;
+    // Async-signal-safe: just flag the main loop to exit; cleanup happens
+    // in the normal context via atexit/emctask_shutdown.
     done = 1;
+}
 
-    // For SIGTERM, stop threads immediately so they don't keep running
-    // while the main loop drains.
-    if (sig == SIGTERM && threads_started) {
-        hal_stop_threads();
-        threads_started = 0;
+// Last-chance cleanup for fatal signals (SIGSEGV/SIGABRT/SIGBUS/SIGFPE).
+// Performs only async-signal-safe operations: shmdt + shmctl(IPC_RMID) on the
+// task shmem.  HAL shmem cleanup is intentionally skipped here because
+// hal_exit acquires hal_data->mutex and is not signal-safe; the next start
+// will reclaim any orphan via reclaim_orphan_hal_shm().
+static void emctask_fatal(int sig)
+{
+    if (emc_shmem_id > 0) {
+        rtapi_shmem_delete(emc_shmem_id, mot_comp_id);
     }
-
-    // Re-register the handler.
-    signal(sig, emctask_quit);
-
-    in_handler = 0;
+    // Restore default handler and re-raise so the kernel still produces a
+    // core dump and the parent shell sees the correct termination status.
+    signal(sig, SIG_DFL);
+    raise(sig);
 }
 
 static int emctask_shutdown(void)
@@ -127,6 +127,16 @@ static int emctask_startup(void)
     return 0;
 }
 
+static int shutdown_done = 0;
+
+static void emctask_atexit(void)
+{
+    if (shutdown_done) return;
+    shutdown_done = 1;
+    emctask_shutdown();
+    stopprintf();
+}
+
 int main(int argc, char *argv[])
 {
     double startTime, endTime, deltaTime;
@@ -140,25 +150,54 @@ int main(int argc, char *argv[])
     (void)argv;
 
     done = 0;
-    signal(SIGINT,  emctask_quit);
-    signal(SIGTERM, emctask_quit);
+
+    // Single point of cleanup — runs on normal return/exit() paths and after
+    // emctask_quit flags the main loop to exit.  Idempotent via shutdown_done.
+    atexit(emctask_atexit);
+
+    // Graceful-stop signals: only flag done; full cleanup runs in atexit.
+    {
+        struct sigaction sa = {};
+        sa.sa_handler = emctask_quit;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = 0;            // no SA_RESTART, so the main loop's
+                                    // timer->wait() returns promptly on EINTR.
+        sigaction(SIGINT,  &sa, nullptr);
+        sigaction(SIGTERM, &sa, nullptr);
+        sigaction(SIGHUP,  &sa, nullptr);
+    }
+
+    // Fatal signals: best-effort detach/RMID of task shmem, then re-raise so
+    // the default handler produces a core dump.
+    {
+        struct sigaction fa = {};
+        fa.sa_handler = emctask_fatal;
+        sigemptyset(&fa.sa_mask);
+        fa.sa_flags = SA_RESETHAND; // run once, then revert to default.
+        sigaction(SIGSEGV, &fa, nullptr);
+        sigaction(SIGABRT, &fa, nullptr);
+        sigaction(SIGBUS,  &fa, nullptr);
+        sigaction(SIGFPE,  &fa, nullptr);
+    }
 
     // --- Initialisation ---
     if (0 != emctask_startup()) {
-        emctask_shutdown();
-        stopprintf();
+        // emctask_atexit will run on exit() and complete cleanup.
         exit(1);
     }
 
     // --- Start real-time threads ---
-    if (hal_start_threads() == 0) {
-        threads_started = 1;
-        rtapi_print_msg(RTAPI_MSG_INFO,
-            "main: threads started (HAL state = %d)\n",
-            hal_get_state());
-    } else {
-        rtapi_print_msg(RTAPI_MSG_ERR,
-            "main: hal_start_threads() failed\n");
+    {
+        int r = hal_start_threads();
+        if (r == 0 || r == -EALREADY) {
+            threads_started = 1;
+            rtapi_print_msg(RTAPI_MSG_INFO,
+                "main: threads started (HAL state = %d)\n",
+                hal_get_state());
+        } else {
+            rtapi_print_msg(RTAPI_MSG_ERR,
+                "main: hal_start_threads() failed (r=%d)\n", r);
+        }
     }
 
     // --- Main control loop ---
@@ -232,9 +271,7 @@ int main(int argc, char *argv[])
         threads_started = 0;
     }
 
-    stopprintf();
-
-    emctask_shutdown();
-
+    // Cleanup (shmem release + hal_exit + timer delete) is handled by
+    // emctask_atexit registered via atexit().
     exit(0);
 }

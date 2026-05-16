@@ -1,19 +1,14 @@
-//
-// Created by Administrator on 2025/8/16.
-//
-
 #include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <signal.h>
+#include <sys/shm.h>
 
 #include "hal.h"
 #include "hal_priv.h"
-
 #include "rtapi/rtapi_common.h"
-
 #include "rtapi/rtapi.h"
-
 
 char *hal_shmem_base = 0;
 hal_data_t *hal_data = 0;
@@ -39,6 +34,7 @@ static void free_oldname_struct(hal_oldname_t * oldname);
 static hal_pin_t *alloc_pin_struct(void);
 static void free_pin_struct(hal_pin_t * pin);
 static int hal_pin_newfv(hal_type_t type, void ** data_ptr_addr, int comp_id, const char *fmt, va_list ap);
+static void reclaim_orphan_hal_shm(void);
 
 int hal_init(const char *name)
 {
@@ -71,6 +67,10 @@ int hal_init(const char *name)
 		{
 			return -EINVAL;
 		}
+
+		/* If a previous process crashed and left a HAL shm segment behind,
+		 * destroy it before requesting a fresh one. */
+		reclaim_orphan_hal_shm();
 
 		/* get HAL shared memory block from RTAPI */
 		lib_mem_id = rtapi_shmem_new(HAL_KEY, lib_module_id, HAL_SIZE);
@@ -1091,6 +1091,11 @@ int hal_app_main(void)
 	rtapi_print_msg(RTAPI_MSG_ERR, "HAL_LIB: ERROR: rtapi init failed\n");
 	return -EINVAL;
     }
+
+    /* If a previous process crashed and left a HAL shm segment behind,
+     * destroy it before requesting a fresh one. */
+    reclaim_orphan_hal_shm();
+
 	//分配 HAL专用的共享内存区域
     /* get HAL shared memory block from RTAPI */
     lib_mem_id = rtapi_shmem_new(HAL_KEY, lib_module_id, HAL_SIZE);
@@ -1181,6 +1186,57 @@ void hal_app_exit(void)
     hal_data->state = HAL_S_DESTROYED;
     /* done */
     // rtapi_print_msg(RTAPI_MSG_DBG,"HAL_LIB: kernel lib removed successfully\n");
+}
+
+// ---------------------------------------------------------------------------
+// reclaim_orphan_hal_shm — best-effort cleanup of a pre-existing HAL shared
+// memory segment whose creator process is no longer alive.
+//
+// Background: the HAL shmem segment is keyed by HAL_KEY and its lifetime is
+// owned by the kernel.  If a previous process crashed (SIGKILL / SIGSEGV /
+// power loss), the kernel keeps the segment around and a new instance will
+// re-attach to the stale layout — in particular, to a stale linked list of
+// pins/params and possibly a stuck spinlock byte in hal_data->mutex.
+//
+// This helper probes the segment via plain shmget/shmat, looks at hal_data->
+// init_pid, and if that PID is no longer running, marks the segment for
+// destruction with IPC_RMID so that the subsequent shmget(IPC_CREAT) creates
+// a fresh one.  If the PID is still alive, we leave the segment alone (a
+// second instance attaching is the legitimate use case).
+// ---------------------------------------------------------------------------
+static void reclaim_orphan_hal_shm(void)
+{
+	int id = shmget((key_t)HAL_KEY, 0, 0);
+	if (id < 0) return;          /* nothing to reclaim */
+
+	struct shmid_ds info;
+	if (shmctl(id, IPC_STAT, &info) < 0) return;
+	if (info.shm_segsz < sizeof(hal_data_t)) {
+		shmctl(id, IPC_RMID, NULL);
+		return;
+	}
+
+	void *addr = shmat(id, NULL, 0);
+	if (addr == (void *)-1) {
+		shmctl(id, IPC_RMID, NULL);
+		return;
+	}
+
+	hal_data_t *old = (hal_data_t *)addr;
+	int orphan = 0;
+	if (old->init_pid <= 0) {
+		orphan = 1;
+	} else if (kill(old->init_pid, 0) == -1 && errno == ESRCH) {
+		orphan = 1;
+	}
+	shmdt(addr);
+
+	if (orphan) {
+		if (shmctl(id, IPC_RMID, NULL) == 0) {
+			rtapi_print_msg(RTAPI_MSG_INFO,
+				"HAL: reclaimed orphan HAL shm (id=%d)\n", id);
+		}
+	}
 }
 
 // ============================================================================
@@ -1364,7 +1420,25 @@ static void thread_task(void *arg)
 
 static int init_hal_data(void)
 {
-    rtapi_mutex_get(&(hal_data->mutex));
+    /* Attempt to acquire the mutex.  If it is already held, the previous
+     * owner may have crashed while holding it.  Use a simple heuristic:
+     * if the HAL state is still UNINIT or INITIALIZING (never progressed to
+     * a running state), we treat the mutex as a stale remnant of a crashed
+     * process and forcibly clear it.  This prevents the new process from
+     * hanging forever on a spinlock that no other process will ever release.
+     */
+    if (rtapi_mutex_try(&(hal_data->mutex)) != 0) {
+        hal_state_t s = hal_data->state;
+        if (s != HAL_S_UNINIT && s != HAL_S_INITIALIZING) {
+            /* The mutex is held by a live process — wait normally. */
+            rtapi_mutex_get(&(hal_data->mutex));
+        } else {
+            /* Stale mutex: no live process should be initialising.
+             * Clear the bit and re-acquire. */
+            rtapi_mutex_give(&(hal_data->mutex));
+            rtapi_mutex_get(&(hal_data->mutex));
+        }
+    }
 
     /* initialize everything */
     hal_data->comp_list_ptr = 0;
@@ -1901,6 +1975,16 @@ int hal_param_s32_new(const char *name, hal_param_dir_t dir, hal_type_t type, ha
 	return hal_param_new(name, type, dir, (void *) data_addr, comp_id);
 }
 
+int hal_param_float_newf(hal_param_dir_t dir, hal_float_t * data_addr, int comp_id, const char *name, ...)
+{
+    char buf[HAL_NAME_LEN + 1];
+    va_list args;
+    va_start(args, name);
+    vsnprintf(buf, sizeof(buf), name, args);
+    va_end(args);
+    return hal_param_new(buf, HAL_FLOAT, dir, (void *)data_addr, comp_id);
+}
+
 int hal_pin_newf(hal_type_t type, hal_s32_t ** data_ptr_addr, int comp_id, const char *fmt, ...)
 {
 	va_list ap;
@@ -2134,7 +2218,6 @@ int hal_pin_new(const char *name, hal_type_t type, void **data_ptr_addr, int com
     int cmp;
     hal_pin_t *new, *ptr;
     hal_comp_t *comp;
-
 
     if (hal_data == 0) {
 	rtapi_print_msg(RTAPI_MSG_ERR,

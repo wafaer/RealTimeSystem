@@ -71,10 +71,8 @@ typedef union {
 
 extern int hal_set_lock(unsigned char lock_type);
 extern unsigned char hal_get_lock();
-extern int hal_export_functf(void (*funct) (void *, long),
-    void *arg, int uses_fp, int reentrant, int comp_id, const char *fmt, ...);
-extern int hal_export_funct(const char *name, void (*funct) (void *, long),
-    void *arg, int uses_fp, int reentrant, int comp_id);
+extern int hal_export_functf(void (*funct) (void *, long), void *arg, int uses_fp, int reentrant, int comp_id, const char *fmt, ...);
+extern int hal_export_funct(const char *name, void (*funct) (void *, long), void *arg, int uses_fp, int reentrant, int comp_id);
 extern int hal_create_thread(const char *name, unsigned long period_nsec, int uses_fp, int priority);
 extern int hal_thread_delete(const char *name);
 extern int hal_add_funct_to_thread(const char *funct_name, const char *thread_name, int position);
@@ -88,15 +86,14 @@ typedef int(*constructor)(char *prefix, char *arg);
 extern int hal_app_main(void);
 extern void hal_app_exit(void);
 
-    extern int hal_param_bit_new(const char *name, hal_param_dir_t dir, hal_type_t type, hal_bit_t * data_addr, int comp_id);
+extern int hal_param_bit_new(const char *name, hal_param_dir_t dir, hal_type_t type, hal_bit_t * data_addr, int comp_id);
 extern int hal_param_s32_new(const char *name, hal_param_dir_t dir, hal_type_t type, hal_s32_t * data_addr,int comp_id);
-    extern int hal_pin_newf(hal_type_t type, hal_s32_t ** data_ptr_addr, int comp_id, const char *fmt, ...);
+extern int hal_pin_newf(hal_type_t type, hal_s32_t ** data_ptr_addr, int comp_id, const char *fmt, ...);
 
 extern int hal_param_new(const char *name, hal_type_t type, hal_param_dir_t dir, void *data_addr, int comp_id);
 
 extern int hal_param_float_newf(hal_param_dir_t dir, hal_float_t * data_addr, int comp_id, const char *fmt, ...);
 extern int hal_pin_new(const char *name, hal_type_t type, void **data_ptr_addr, int comp_id);
-// extern int hal_pin_newfv(hal_type_t type, void ** data_ptr_addr, int comp_id, const char *fmt, ...);
 
 #ifdef __cplusplus
 }

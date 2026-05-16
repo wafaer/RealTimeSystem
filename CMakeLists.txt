@@ -56,11 +56,11 @@ set(MOTRO_CONTROL_SOURCES
     ExampleTask/task.c
     ExampleTask/funct_command.c
     ExampleTask/funct_control.c
+    ExampleTask/simple_tp.c
 
     # ExampleTask — C++ RAII lifecycle wrapper
-    ExampleTask/operate.cpp
 
-    # Main entry point — process lifecycle manager
+        # Main entry point — process lifecycle manager
     main/taskmain.cpp
 
     # Stubs for external symbols from the full LinuxCNC codebase
@@ -75,6 +75,7 @@ set(MOTRO_CONTROL_SOURCES
 
 set(MOTRO_CONTROL_HEADERS
     ExampleTask/task.h
+    ExampleTask/simple_tp.h
     rtapi/rtapi_common.h
     rtapi/rtapi_mutex.h
     rtapi/rtapi_bitops.h

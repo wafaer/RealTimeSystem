@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/wg/slam/motion/RealTimeSystem/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
