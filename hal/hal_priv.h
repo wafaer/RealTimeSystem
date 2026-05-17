@@ -243,5 +243,28 @@ extern hal_thread_t *halpr_find_thread_by_name(const char *name);
 extern hal_funct_t *halpr_find_funct_by_name(const char *name);
 extern hal_comp_t *halpr_find_comp_by_id(int id);
 
+/* Cross-TU symbols exposed after splitting hal_lib.c into hal_core /
+ * hal_shmem / hal_rt / hal_io.  These were previously file-static. */
+extern int lib_module_id;
+
+extern void *shmalloc_up(long int size);
+extern void *shmalloc_dn(long int size);
+
+extern hal_comp_t *halpr_alloc_comp_struct(void);
+extern void free_comp_struct(hal_comp_t *comp);
+extern void free_funct_struct(hal_funct_t *funct);
+extern void free_funct_entry_struct(hal_funct_entry_t *funct_entry);
+extern void free_thread_struct(hal_thread_t *thread);
+extern void free_param_struct(hal_param_t *param);
+extern void free_pin_struct(hal_pin_t *pin);
+extern void free_oldname_struct(hal_oldname_t *oldname);
+
+extern hal_funct_t *alloc_funct_struct(void);
+extern hal_funct_entry_t *alloc_funct_entry_struct(void);
+extern hal_thread_t *alloc_thread_struct(void);
+extern hal_param_t *alloc_param_struct(void);
+extern hal_pin_t *alloc_pin_struct(void);
+
+extern int init_hal_data(void);
 
 #endif //HAL_PRIV_H

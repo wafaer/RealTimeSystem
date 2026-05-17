@@ -9,7 +9,10 @@ SoemMotroControl: \
   CMakeFiles/SoemMotroControl.dir/ExampleTask/funct_control.c.o \
   CMakeFiles/SoemMotroControl.dir/ExampleTask/simple_tp.c.o \
   CMakeFiles/SoemMotroControl.dir/main/taskmain.cpp.o \
-  CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.o \
+  CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.o \
+  CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.o \
+  CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.o \
+  CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.o \
   CMakeFiles/SoemMotroControl.dir/rtapi/uspace_rtapi_app.cpp.o \
   CMakeFiles/SoemMotroControl.dir/rtapi/uspace_common.c.o \
   CMakeFiles/SoemMotroControl.dir/time/timer.cpp.o \
@@ -64,7 +67,13 @@ CMakeFiles/SoemMotroControl.dir/ExampleTask/simple_tp.c.o:
 
 CMakeFiles/SoemMotroControl.dir/main/taskmain.cpp.o:
 
-CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.o:
+CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.o:
+
+CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.o:
+
+CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.o:
+
+CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.o:
 
 CMakeFiles/SoemMotroControl.dir/rtapi/uspace_rtapi_app.cpp.o:
 

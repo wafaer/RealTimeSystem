@@ -66,7 +66,10 @@ set(MOTRO_CONTROL_SOURCES
     # Stubs for external symbols from the full LinuxCNC codebase
 
         # HAL — Hardware Abstraction Layer (C)
-    hal/hal_lib.c
+    hal/hal_core.c
+    hal/hal_shmem.c
+    hal/hal_rt.c
+    hal/hal_io.c
 
     # RTAPI — Real-Time API userspace layer
     rtapi/uspace_rtapi_app.cpp

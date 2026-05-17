@@ -142,24 +142,66 @@ CMakeFiles/SoemMotroControl.dir/main/taskmain.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/SoemMotroControl.dir/main/taskmain.cpp.s"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/wg/slam/motion/RealTimeSystem/main/taskmain.cpp -o CMakeFiles/SoemMotroControl.dir/main/taskmain.cpp.s
 
-CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.o: CMakeFiles/SoemMotroControl.dir/flags.make
-CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.o: /home/wg/slam/motion/RealTimeSystem/hal/hal_lib.c
-CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.o: CMakeFiles/SoemMotroControl.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/wg/slam/motion/RealTimeSystem/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building C object CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.o"
-	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.o -MF CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.o.d -o CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.o -c /home/wg/slam/motion/RealTimeSystem/hal/hal_lib.c
+CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.o: CMakeFiles/SoemMotroControl.dir/flags.make
+CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.o: /home/wg/slam/motion/RealTimeSystem/hal/hal_core.c
+CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.o: CMakeFiles/SoemMotroControl.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/wg/slam/motion/RealTimeSystem/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building C object CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.o"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.o -MF CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.o.d -o CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.o -c /home/wg/slam/motion/RealTimeSystem/hal/hal_core.c
 
-CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.i"
-	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/wg/slam/motion/RealTimeSystem/hal/hal_lib.c > CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.i
+CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.i"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/wg/slam/motion/RealTimeSystem/hal/hal_core.c > CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.i
 
-CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.s"
-	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/wg/slam/motion/RealTimeSystem/hal/hal_lib.c -o CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.s
+CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.s"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/wg/slam/motion/RealTimeSystem/hal/hal_core.c -o CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.s
+
+CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.o: CMakeFiles/SoemMotroControl.dir/flags.make
+CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.o: /home/wg/slam/motion/RealTimeSystem/hal/hal_shmem.c
+CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.o: CMakeFiles/SoemMotroControl.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/wg/slam/motion/RealTimeSystem/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building C object CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.o"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.o -MF CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.o.d -o CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.o -c /home/wg/slam/motion/RealTimeSystem/hal/hal_shmem.c
+
+CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.i"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/wg/slam/motion/RealTimeSystem/hal/hal_shmem.c > CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.i
+
+CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.s"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/wg/slam/motion/RealTimeSystem/hal/hal_shmem.c -o CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.s
+
+CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.o: CMakeFiles/SoemMotroControl.dir/flags.make
+CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.o: /home/wg/slam/motion/RealTimeSystem/hal/hal_rt.c
+CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.o: CMakeFiles/SoemMotroControl.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/wg/slam/motion/RealTimeSystem/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building C object CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.o"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.o -MF CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.o.d -o CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.o -c /home/wg/slam/motion/RealTimeSystem/hal/hal_rt.c
+
+CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.i"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/wg/slam/motion/RealTimeSystem/hal/hal_rt.c > CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.i
+
+CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.s"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/wg/slam/motion/RealTimeSystem/hal/hal_rt.c -o CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.s
+
+CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.o: CMakeFiles/SoemMotroControl.dir/flags.make
+CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.o: /home/wg/slam/motion/RealTimeSystem/hal/hal_io.c
+CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.o: CMakeFiles/SoemMotroControl.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/wg/slam/motion/RealTimeSystem/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building C object CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.o"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.o -MF CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.o.d -o CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.o -c /home/wg/slam/motion/RealTimeSystem/hal/hal_io.c
+
+CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.i"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/wg/slam/motion/RealTimeSystem/hal/hal_io.c > CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.i
+
+CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.s"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/wg/slam/motion/RealTimeSystem/hal/hal_io.c -o CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.s
 
 CMakeFiles/SoemMotroControl.dir/rtapi/uspace_rtapi_app.cpp.o: CMakeFiles/SoemMotroControl.dir/flags.make
 CMakeFiles/SoemMotroControl.dir/rtapi/uspace_rtapi_app.cpp.o: /home/wg/slam/motion/RealTimeSystem/rtapi/uspace_rtapi_app.cpp
 CMakeFiles/SoemMotroControl.dir/rtapi/uspace_rtapi_app.cpp.o: CMakeFiles/SoemMotroControl.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/wg/slam/motion/RealTimeSystem/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object CMakeFiles/SoemMotroControl.dir/rtapi/uspace_rtapi_app.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/wg/slam/motion/RealTimeSystem/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object CMakeFiles/SoemMotroControl.dir/rtapi/uspace_rtapi_app.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/SoemMotroControl.dir/rtapi/uspace_rtapi_app.cpp.o -MF CMakeFiles/SoemMotroControl.dir/rtapi/uspace_rtapi_app.cpp.o.d -o CMakeFiles/SoemMotroControl.dir/rtapi/uspace_rtapi_app.cpp.o -c /home/wg/slam/motion/RealTimeSystem/rtapi/uspace_rtapi_app.cpp
 
 CMakeFiles/SoemMotroControl.dir/rtapi/uspace_rtapi_app.cpp.i: cmake_force
@@ -173,7 +215,7 @@ CMakeFiles/SoemMotroControl.dir/rtapi/uspace_rtapi_app.cpp.s: cmake_force
 CMakeFiles/SoemMotroControl.dir/rtapi/uspace_common.c.o: CMakeFiles/SoemMotroControl.dir/flags.make
 CMakeFiles/SoemMotroControl.dir/rtapi/uspace_common.c.o: /home/wg/slam/motion/RealTimeSystem/rtapi/uspace_common.c
 CMakeFiles/SoemMotroControl.dir/rtapi/uspace_common.c.o: CMakeFiles/SoemMotroControl.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/wg/slam/motion/RealTimeSystem/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building C object CMakeFiles/SoemMotroControl.dir/rtapi/uspace_common.c.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/wg/slam/motion/RealTimeSystem/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building C object CMakeFiles/SoemMotroControl.dir/rtapi/uspace_common.c.o"
 	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/SoemMotroControl.dir/rtapi/uspace_common.c.o -MF CMakeFiles/SoemMotroControl.dir/rtapi/uspace_common.c.o.d -o CMakeFiles/SoemMotroControl.dir/rtapi/uspace_common.c.o -c /home/wg/slam/motion/RealTimeSystem/rtapi/uspace_common.c
 
 CMakeFiles/SoemMotroControl.dir/rtapi/uspace_common.c.i: cmake_force
@@ -187,7 +229,7 @@ CMakeFiles/SoemMotroControl.dir/rtapi/uspace_common.c.s: cmake_force
 CMakeFiles/SoemMotroControl.dir/time/timer.cpp.o: CMakeFiles/SoemMotroControl.dir/flags.make
 CMakeFiles/SoemMotroControl.dir/time/timer.cpp.o: /home/wg/slam/motion/RealTimeSystem/time/timer.cpp
 CMakeFiles/SoemMotroControl.dir/time/timer.cpp.o: CMakeFiles/SoemMotroControl.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/wg/slam/motion/RealTimeSystem/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object CMakeFiles/SoemMotroControl.dir/time/timer.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/wg/slam/motion/RealTimeSystem/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object CMakeFiles/SoemMotroControl.dir/time/timer.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/SoemMotroControl.dir/time/timer.cpp.o -MF CMakeFiles/SoemMotroControl.dir/time/timer.cpp.o.d -o CMakeFiles/SoemMotroControl.dir/time/timer.cpp.o -c /home/wg/slam/motion/RealTimeSystem/time/timer.cpp
 
 CMakeFiles/SoemMotroControl.dir/time/timer.cpp.i: cmake_force
@@ -201,7 +243,7 @@ CMakeFiles/SoemMotroControl.dir/time/timer.cpp.s: cmake_force
 CMakeFiles/SoemMotroControl.dir/time/_timer.cpp.o: CMakeFiles/SoemMotroControl.dir/flags.make
 CMakeFiles/SoemMotroControl.dir/time/_timer.cpp.o: /home/wg/slam/motion/RealTimeSystem/time/_timer.cpp
 CMakeFiles/SoemMotroControl.dir/time/_timer.cpp.o: CMakeFiles/SoemMotroControl.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/wg/slam/motion/RealTimeSystem/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object CMakeFiles/SoemMotroControl.dir/time/_timer.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/wg/slam/motion/RealTimeSystem/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object CMakeFiles/SoemMotroControl.dir/time/_timer.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/SoemMotroControl.dir/time/_timer.cpp.o -MF CMakeFiles/SoemMotroControl.dir/time/_timer.cpp.o.d -o CMakeFiles/SoemMotroControl.dir/time/_timer.cpp.o -c /home/wg/slam/motion/RealTimeSystem/time/_timer.cpp
 
 CMakeFiles/SoemMotroControl.dir/time/_timer.cpp.i: cmake_force
@@ -219,7 +261,10 @@ SoemMotroControl_OBJECTS = \
 "CMakeFiles/SoemMotroControl.dir/ExampleTask/funct_control.c.o" \
 "CMakeFiles/SoemMotroControl.dir/ExampleTask/simple_tp.c.o" \
 "CMakeFiles/SoemMotroControl.dir/main/taskmain.cpp.o" \
-"CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.o" \
+"CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.o" \
+"CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.o" \
+"CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.o" \
+"CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.o" \
 "CMakeFiles/SoemMotroControl.dir/rtapi/uspace_rtapi_app.cpp.o" \
 "CMakeFiles/SoemMotroControl.dir/rtapi/uspace_common.c.o" \
 "CMakeFiles/SoemMotroControl.dir/time/timer.cpp.o" \
@@ -233,7 +278,10 @@ SoemMotroControl: CMakeFiles/SoemMotroControl.dir/ExampleTask/funct_command.c.o
 SoemMotroControl: CMakeFiles/SoemMotroControl.dir/ExampleTask/funct_control.c.o
 SoemMotroControl: CMakeFiles/SoemMotroControl.dir/ExampleTask/simple_tp.c.o
 SoemMotroControl: CMakeFiles/SoemMotroControl.dir/main/taskmain.cpp.o
-SoemMotroControl: CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.o
+SoemMotroControl: CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.o
+SoemMotroControl: CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.o
+SoemMotroControl: CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.o
+SoemMotroControl: CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.o
 SoemMotroControl: CMakeFiles/SoemMotroControl.dir/rtapi/uspace_rtapi_app.cpp.o
 SoemMotroControl: CMakeFiles/SoemMotroControl.dir/rtapi/uspace_common.c.o
 SoemMotroControl: CMakeFiles/SoemMotroControl.dir/time/timer.cpp.o
@@ -241,7 +289,7 @@ SoemMotroControl: CMakeFiles/SoemMotroControl.dir/time/_timer.cpp.o
 SoemMotroControl: CMakeFiles/SoemMotroControl.dir/build.make
 SoemMotroControl: CMakeFiles/SoemMotroControl.dir/compiler_depend.ts
 SoemMotroControl: CMakeFiles/SoemMotroControl.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/wg/slam/motion/RealTimeSystem/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Linking CXX executable SoemMotroControl"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/wg/slam/motion/RealTimeSystem/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Linking CXX executable SoemMotroControl"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/SoemMotroControl.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

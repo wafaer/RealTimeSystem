@@ -225,29 +225,101 @@ ExampleTask/task.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/SoemMotroControl.dir/build.make CMakeFiles/SoemMotroControl.dir/ExampleTask/task.c.s
 .PHONY : ExampleTask/task.c.s
 
-hal/hal_lib.o: hal/hal_lib.c.o
-.PHONY : hal/hal_lib.o
+hal/hal_core.o: hal/hal_core.c.o
+.PHONY : hal/hal_core.o
 
 # target to build an object file
-hal/hal_lib.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/SoemMotroControl.dir/build.make CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.o
-.PHONY : hal/hal_lib.c.o
+hal/hal_core.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/SoemMotroControl.dir/build.make CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.o
+.PHONY : hal/hal_core.c.o
 
-hal/hal_lib.i: hal/hal_lib.c.i
-.PHONY : hal/hal_lib.i
+hal/hal_core.i: hal/hal_core.c.i
+.PHONY : hal/hal_core.i
 
 # target to preprocess a source file
-hal/hal_lib.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/SoemMotroControl.dir/build.make CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.i
-.PHONY : hal/hal_lib.c.i
+hal/hal_core.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/SoemMotroControl.dir/build.make CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.i
+.PHONY : hal/hal_core.c.i
 
-hal/hal_lib.s: hal/hal_lib.c.s
-.PHONY : hal/hal_lib.s
+hal/hal_core.s: hal/hal_core.c.s
+.PHONY : hal/hal_core.s
 
 # target to generate assembly for a file
-hal/hal_lib.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/SoemMotroControl.dir/build.make CMakeFiles/SoemMotroControl.dir/hal/hal_lib.c.s
-.PHONY : hal/hal_lib.c.s
+hal/hal_core.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/SoemMotroControl.dir/build.make CMakeFiles/SoemMotroControl.dir/hal/hal_core.c.s
+.PHONY : hal/hal_core.c.s
+
+hal/hal_io.o: hal/hal_io.c.o
+.PHONY : hal/hal_io.o
+
+# target to build an object file
+hal/hal_io.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/SoemMotroControl.dir/build.make CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.o
+.PHONY : hal/hal_io.c.o
+
+hal/hal_io.i: hal/hal_io.c.i
+.PHONY : hal/hal_io.i
+
+# target to preprocess a source file
+hal/hal_io.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/SoemMotroControl.dir/build.make CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.i
+.PHONY : hal/hal_io.c.i
+
+hal/hal_io.s: hal/hal_io.c.s
+.PHONY : hal/hal_io.s
+
+# target to generate assembly for a file
+hal/hal_io.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/SoemMotroControl.dir/build.make CMakeFiles/SoemMotroControl.dir/hal/hal_io.c.s
+.PHONY : hal/hal_io.c.s
+
+hal/hal_rt.o: hal/hal_rt.c.o
+.PHONY : hal/hal_rt.o
+
+# target to build an object file
+hal/hal_rt.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/SoemMotroControl.dir/build.make CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.o
+.PHONY : hal/hal_rt.c.o
+
+hal/hal_rt.i: hal/hal_rt.c.i
+.PHONY : hal/hal_rt.i
+
+# target to preprocess a source file
+hal/hal_rt.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/SoemMotroControl.dir/build.make CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.i
+.PHONY : hal/hal_rt.c.i
+
+hal/hal_rt.s: hal/hal_rt.c.s
+.PHONY : hal/hal_rt.s
+
+# target to generate assembly for a file
+hal/hal_rt.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/SoemMotroControl.dir/build.make CMakeFiles/SoemMotroControl.dir/hal/hal_rt.c.s
+.PHONY : hal/hal_rt.c.s
+
+hal/hal_shmem.o: hal/hal_shmem.c.o
+.PHONY : hal/hal_shmem.o
+
+# target to build an object file
+hal/hal_shmem.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/SoemMotroControl.dir/build.make CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.o
+.PHONY : hal/hal_shmem.c.o
+
+hal/hal_shmem.i: hal/hal_shmem.c.i
+.PHONY : hal/hal_shmem.i
+
+# target to preprocess a source file
+hal/hal_shmem.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/SoemMotroControl.dir/build.make CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.i
+.PHONY : hal/hal_shmem.c.i
+
+hal/hal_shmem.s: hal/hal_shmem.c.s
+.PHONY : hal/hal_shmem.s
+
+# target to generate assembly for a file
+hal/hal_shmem.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/SoemMotroControl.dir/build.make CMakeFiles/SoemMotroControl.dir/hal/hal_shmem.c.s
+.PHONY : hal/hal_shmem.c.s
 
 main/taskmain.o: main/taskmain.cpp.o
 .PHONY : main/taskmain.o
@@ -390,9 +462,18 @@ help:
 	@echo "... ExampleTask/task.o"
 	@echo "... ExampleTask/task.i"
 	@echo "... ExampleTask/task.s"
-	@echo "... hal/hal_lib.o"
-	@echo "... hal/hal_lib.i"
-	@echo "... hal/hal_lib.s"
+	@echo "... hal/hal_core.o"
+	@echo "... hal/hal_core.i"
+	@echo "... hal/hal_core.s"
+	@echo "... hal/hal_io.o"
+	@echo "... hal/hal_io.i"
+	@echo "... hal/hal_io.s"
+	@echo "... hal/hal_rt.o"
+	@echo "... hal/hal_rt.i"
+	@echo "... hal/hal_rt.s"
+	@echo "... hal/hal_shmem.o"
+	@echo "... hal/hal_shmem.i"
+	@echo "... hal/hal_shmem.s"
 	@echo "... main/taskmain.o"
 	@echo "... main/taskmain.i"
 	@echo "... main/taskmain.s"
