@@ -1,90 +1,118 @@
-//
-// Created by wg on 5/14/26.
-//
+/// \file timer.h
+///
+/// 实时系统计时器接口定义。
+///
+/// 提供 etime/esleep C 接口以及 C++ 层面的 RCS_TIMER 类，
+/// 支持周期性同步等待、超时控制及调度负载统计。
 
 #ifndef REALTIMESYSTEM_TIMER_H
 #define REALTIMESYSTEM_TIMER_H
 
-extern "C" {
-#include <stdio.h>		/* NULL */
-} extern "C" {
-    /* number of seconds from standard epoch, to clock tick resolution */
-    extern double etime(void);
-    /* Return the number of seconds from some event. The time will be rounded
-       up to the resolution of the system clock or the most precise time
-       measuring function available for the given platform. For the value
-       returned to mean anything you need to be able to compare it with a
-       value stored from a previous call to etime(). */
+#include <stdio.h>
 
-    /* sleeps # of seconds, to clock tick resolution */
-    extern void esleep(double secs);
-    /* Go to sleep for _secs seconds. The time will be rounded up to the
-       resolution of the system clock or the most precise sleep or delay
-       function available for the given platform. */
-}
+#include "_timer.h"
+
 class RCS_SEMAPHORE;
 
-/* prototype for user-defined timing function */
-typedef int (*RCS_TIMERFUNC) (void *_arg);
+/// \brief 用户自定义计时同步回调函数类型。
+///
+/// \param _arg 传递给回调函数的用户参数。
+/// \return 0 同步成功；非 0 终止等待。
+typedef int (*RCS_TIMERFUNC)(void *_arg);
 
+/// \brief 周期定时器类。
+///
+/// 提供周期性同步等待、超时控制及调度负载统计功能。
+/// 支持外部时间基准回调函数，用于与非系统时钟事件同步。
 class RCS_TIMER {
   public:
-/* Getting rid of this stuff which no one uses and makes porting more
-difficult */
+    /// \brief 构造定时器（仅指定超时）。
+    ///
+    /// \param timeout  周期超时时长（秒）。
+    /// \param function 可选的外部同步回调函数。
+    /// \param arg      传递给回调函数的用户参数。
     RCS_TIMER(double timeout, RCS_TIMERFUNC function =
-	(RCS_TIMERFUNC) NULL, void *arg = NULL);
+        (RCS_TIMERFUNC)NULL, void *arg = NULL);
 
-      RCS_TIMER(const char *process_name, const char *timer_config_file);
-      RCS_TIMER(double _timeout, const char *process_name, const char *timer_config_file);
-    /* Initialize a new RCS_TIMER object. _interval is the cycle period.
-       _function is an optional function for synchronizing to an event other
-       than the system clock. _arg is a parameter that will be passed to
-       function. */
+    /// \brief 构造定时器（从配置文件初始化）。
+    ///
+    /// \param process_name       进程名称。
+    /// \param timer_config_file  配置文件路径。
+    RCS_TIMER(const char *process_name, const char *timer_config_file);
 
-    /* timeout is wait interval, rounded up to clock tick resolution;
-       function is external time base, if provided */
-     ~RCS_TIMER();
-    int wait();			/* wait on synch; returns # of cycles missed */
-    /* Wait until the end of interval or until a user function returns.
+    /// \brief 构造定时器（指定超时和配置文件）。
+    ///
+    /// \param _timeout            周期超时时长（秒）。
+    /// \param process_name       进程名称。
+    /// \param timer_config_file  配置文件路径。
+    RCS_TIMER(double _timeout, const char *process_name,
+              const char *timer_config_file);
 
-       Returns: 0 for success, the number of cycles missed if it missed some
-       cycles, or -1 if some other error occurred. */
+    /// \brief 销毁定时器，释放相关资源。
+    ~RCS_TIMER();
 
-    double load();		/* returns % loading on timer, 0.0 means all
-				   waits, 1.0 means no time in wait */
-    /* Returns the percentage of loading by the cyclic process. If the
-       process spends all of its time waiting for the synchronizing event
-       then it returns 0.0. If it spends all of its time doing something else
-       before calling wait then it returns 1.0. The load percentage is the
-       average load over all of the previous cycles. */
-    void sync();		/* restart the wait interval. */
-    /* Restart the wait interval now. */
-    double timeout;		/* copy of timeout */
+    /// \brief 等待直到周期结束或回调函数返回。
+    ///
+    /// \return 0 成功；正数 错过的周期数；-1 发生错误。
+    int wait();
+
+    /// \brief 获取周期调度的 CPU 负载。
+    ///
+    /// \return 0.0 表示全部时间在等待；1.0 表示等待前已耗尽全部时间；
+    ///     介于两者之间表示平均负载百分比。
+    double load();
+
+    /// \brief 立即重置等待周期。
+    ///
+    /// 从调用时刻重新开始计时。
+    void sync();
+
+    /// 当前设定的超时时长（秒）。
+    double timeout;
 
   private:
+    /// \brief 内部初始化。
+    ///
+    /// \param _timeout 超时值。
+    /// \param _id      定时器标识。
     void init(double _timeout, int _id);
 
+    /// \brief 重置定时器内部状态。
     void zero_timer();
+
+    /// \brief 设置超时时长。
+    ///
+    /// \param _timeout 新的超时值（秒）。
     void set_timeout(double _timeout);
-/*! \todo Another #if 0 */
-#if 0
-    void read_config_file(char *process, char *config_file);
-#endif
-    RCS_TIMERFUNC function;	/* copy of function */
-    void *arg;			/* arg for function */
-    double last_time;		/* last wakeup, in ticks from epoch */
-    double start_time;		/* epoch time at creation of timer */
-    double idle;		/* accumulated idle time */
-    int counts;			/* accumulated waits */
+
+    /// 用户提供的同步回调函数。
+    RCS_TIMERFUNC function;
+    /// 传递给回调函数的用户参数。
+    void *arg;
+    /// 上一次唤醒时刻（自 epoch 起）。
+    double last_time;
+    /// 定时器创建时的 epoch 时刻。
+    double start_time;
+    /// 累计空闲时间。
+    double idle;
+    /// 累计等待次数。
+    int counts;
+    /// 距上次真正睡眠以来的等待次数。
     int counts_since_real_sleep;
+    /// 每次真正睡眠前的等待次数阈值。
     int counts_per_real_sleep;
+    /// 距上次真正睡眠以来的时间。
     double time_since_real_sleep;
 #ifdef USE_SEMS_FOR_TIMER
+    /// 信号量指针数组（条件编译）。
     RCS_SEMAPHORE **sems;
 #endif
+    /// 信号量数量。
     int num_sems;
+    /// 定时器标识符。
     int id;
+    /// 时钟滴答周期值（秒）。
     double clk_tck_val;
 };
 
-#endif //REALTIMESYSTEM_TIMER_H
+#endif  // REALTIMESYSTEM_TIMER_H
