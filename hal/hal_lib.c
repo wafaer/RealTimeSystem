@@ -1067,7 +1067,7 @@ int hal_stop_threads(void)
 
     hal_data->threads_running = 0;
     hal_data->state = HAL_S_ACTIVE;
-    // rtapi_print_msg(RTAPI_MSG_DBG, "HAL: threads stopped\n");
+    rtapi_print_msg(RTAPI_MSG_DBG, "HAL: threads stopped\n");
     return 0;
 }
 

@@ -321,14 +321,6 @@ void RtapiApp::unexpected_realtime_delay(rtapi_task *task, int /*nperiod*/) {
     }
 }
 
-// ============================================================================
-// Posix::task_delete — cancels and joins the task thread, then releases all
-// resources (semaphores, object, array slot).
-//
-// The function is idempotent: a task in DELETED state returns -EALREADY.
-// If the task is paused at deletion time, the resume semaphore is posted
-// first to unblock the thread so cancellation can proceed.
-// ============================================================================
 int Posix::task_delete(int id)
 {
   auto task = ::rtapi_get_task<PosixTask>(id);

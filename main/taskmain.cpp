@@ -28,30 +28,27 @@ static void emctask_quit(int sig);
 static int  emctask_shutdown(void);
 static int  emctask_startup(void);
 
+// 常规退出信号
+// 拦截SIGINT(CTRL+C),SIGTERM,SIGHUP
 static void emctask_quit(int sig)
 {
     (void)sig;
-    // Async-signal-safe: just flag the main loop to exit; cleanup happens
-    // in the normal context via atexit/emctask_shutdown.
+
     done = 1;
 }
 
-// Last-chance cleanup for fatal signals (SIGSEGV/SIGABRT/SIGBUS/SIGFPE).
-// Performs only async-signal-safe operations: shmdt + shmctl(IPC_RMID) on the
-// task shmem.  HAL shmem cleanup is intentionally skipped here because
-// hal_exit acquires hal_data->mutex and is not signal-safe; the next start
-// will reclaim any orphan via reclaim_orphan_hal_shm().
+// 拦截段错误（SIFSEVG）
 static void emctask_fatal(int sig)
 {
     if (emc_shmem_id > 0) {
         rtapi_shmem_delete(emc_shmem_id, mot_comp_id);
     }
-    // Restore default handler and re-raise so the kernel still produces a
-    // core dump and the parent shell sees the correct termination status.
+
     signal(sig, SIG_DFL);
     raise(sig);
 }
 
+//
 static int emctask_shutdown(void)
 {
     // Phase 1 — stop real-time threads.
@@ -145,6 +142,7 @@ int main(int argc, char *argv[])
     int    latency_excursion_factor = 10;
     double minTime, maxTime;
     int    cycle_counter = 0;
+    int    motion_was_active = 0;
 
     (void)argc;
     (void)argv;
@@ -243,6 +241,22 @@ int main(int argc, char *argv[])
                     taskShared->heartbeat,
                     taskShared->cycle_count,
                     taskShared->last_wakeup_ns);
+            }
+        }
+
+        // Auto-exit when the startup trajectory finishes. We only trigger
+        // *after* we have observed an active phase, so the very first cycles
+        // (before the command handler runs) don't terminate the program.
+        if (taskShared) {
+            if (taskShared->tp.active) {
+                motion_was_active = 1;
+            } else if (motion_was_active) {
+                rtapi_print_msg(RTAPI_MSG_INFO,
+                    "main: motion complete (curr_pos=%.3f, "
+                    "target=%.3f) — exiting\n",
+                    taskShared->tp.curr_pos,
+                    taskShared->tp.pos_cmd);
+                done = 1;
             }
         }
 

@@ -191,14 +191,15 @@ static int init_task_comm_buffers(void)
     taskShared->shm_version = TASK_SHM_VERSION;
     taskShared->creator_pid = getpid();
 
-    // Trajectory planner initial state.
-    taskShared->tp.enable   = 0;
+    // Trajectory planner initial state — auto-start motion at boot:
+    // pos_cmd=1e6, vel=1000, acc=10000, period=1ms (≈ 1000 s total).
+    taskShared->tp.enable   = 1;
     taskShared->tp.active   = 0;
-    taskShared->tp.pos_cmd  = 0.0f;
+    taskShared->tp.pos_cmd  = 10000.0f;
     taskShared->tp.curr_pos = 0.0f;
     taskShared->tp.curr_vel = 0.0f;
-    taskShared->tp.vel      = 100.0f;    // max vel (units/s)
-    taskShared->tp.acc      = 500.0f;    // max acc (units/s^2)
+    taskShared->tp.vel      = 1000.0f;
+    taskShared->tp.acc      = 10000.0f;
 
     // PID initial state.
     pid_init(&taskShared->pid);
@@ -238,6 +239,12 @@ static int init_hal_pins_and_params(void)
     if (hal_pin_newf(HAL_FLOAT, (hal_s32_t **)&taskHalData->vel_cmd,
             mot_comp_id, "vel-cmd") != 0) return -1;
 
+    // Drive the motion automatically at startup — these are the values the
+    // command handler will copy into the trajectory planner on its first cycle.
+    *(hal_bit_t   *)taskHalData->enable  = 1;
+    *(hal_float_t *)taskHalData->pos_cmd = 10000.0f;
+    *(hal_float_t *)taskHalData->vel_cmd = 1000.0f;
+
     // ---- Output pins ----
     if (hal_pin_newf(HAL_FLOAT, (hal_s32_t **)&taskHalData->planned_pos,
             mot_comp_id, "planned-pos") != 0) return -1;
@@ -263,8 +270,8 @@ static int init_hal_pins_and_params(void)
     ALLOC_PARAM(hal_s32_t,   taskHalData->cycle_count_out);
 
     // Default parameter values.
-    *taskHalData->tp_vel  = 100.0f;
-    *taskHalData->tp_acc  = 500.0f;
+    *taskHalData->tp_vel  = 1000.0f;
+    *taskHalData->tp_acc  = 10000.0f;
     *taskHalData->pid_kp  = 10.0f;
     *taskHalData->pid_ki  = 0.0f;
     *taskHalData->pid_kd  = 0.0f;

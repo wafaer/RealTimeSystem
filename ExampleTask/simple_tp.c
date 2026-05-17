@@ -4,10 +4,11 @@
 void simple_tp_update(simple_tp_t *tp, int32_t period)
 {
     double max_dv, tiny_dp, pos_err, vel_req;
+    double period_s = (double)period * 1e-9;
 
     tp->active = 0;
-    max_dv = tp->acc * period;
-    tiny_dp = TINY_DP(tp->acc, period);
+    max_dv = tp->acc * period_s;
+    tiny_dp = TINY_DP(tp->acc, period_s);
 
     if (tp->enable) {
         pos_err = tp->pos_cmd - tp->curr_pos;
@@ -45,5 +46,5 @@ void simple_tp_update(simple_tp_t *tp, int32_t period)
         tp->active = 1;
     }
 
-    tp->curr_pos += tp->curr_vel * period;
+    tp->curr_pos += tp->curr_vel * period_s;
 }
